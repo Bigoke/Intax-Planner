@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data:; img-src 'self' data:;">
+<title>Intax Planner</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="brand"><span class="brand-mark">IT</span><div><div class="brand-name">Intax Planner</div><div class="brand-sub" id="practiceName">Tax planning workstation</div></div></div>
+    <button class="client-switch" id="clientSwitch" title="Change client (Ctrl+K)"><span class="cs-label">Client</span><span class="cs-name" id="clientName">No client selected</span><span class="cs-ref" id="clientRef"></span></button>
+    <label class="year-select"><span>Tax year</span><select id="yearSelect"></select></label>
+    <div class="search-wrap"><input id="globalSearch" placeholder="Search tax topics, source codes or screens…  (Ctrl+F)" autocomplete="off"><div id="searchResults" class="search-results hidden"></div></div>
+    <button class="btn btn-ghost" id="wizardBtn" title="Guided wizards">✦ Wizards</button>
+    <button class="btn btn-primary" id="reportsBtn">Reports</button>
+  </header>
+  <nav id="sidebar"></nav>
+  <main id="content"></main>
+  <aside id="summary"></aside>
+</div>
+<div id="modalRoot"></div>
+<div id="toast" class="toast hidden"></div>
+<script src="../src/data/taxpacks.js"></script>
+<script src="../src/data/codes.js"></script>
+<script src="../src/data/help.js"></script>
+<script src="../src/engine/engine.js"></script>
+<script src="ui.js"></script>
+<script src="screens.js"></script>
+<script src="wizards.js"></script>
+<script src="reports.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

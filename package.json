@@ -1,0 +1,55 @@
+{
+  "name": "intax-planner",
+  "productName": "Intax Planner",
+  "version": "1.0.0",
+  "description": "South African individual income tax planner: provisional tax (IRP6) and ITR12",
+  "main": "main.js",
+  "author": "Bigoke",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/engine.test.js",
+    "smoke": "electron --no-sandbox scripts/smoke.js",
+    "dist": "electron-builder --win nsis portable",
+    "dist:linux-host": "electron-builder --win portable --publish never && makensis -DVERSION=$npm_package_version build/installer.nsi"
+  },
+  "build": {
+    "appId": "za.co.bigoke.intaxplanner",
+    "productName": "Intax Planner",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "renderer/**/*",
+      "build/icon.png"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Intax-Planner-Setup-${version}.exe",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "shortcutName": "Intax Planner"
+    },
+    "portable": {
+      "artifactName": "Intax-Planner-Portable-${version}.exe"
+    },
+    "afterPack": "build/afterPack.js"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
+    "resedit": "^1.7.2"
+  }
+}
