@@ -141,5 +141,40 @@ r = E.compute(client(), y, P(2027), CODES);
 eq('recon diff', r.recon.rows[0].diff, 1240000 - 1234567);
 eq('objection deadline set', r.recon.objectionDeadline > '2027-02-01' ? 1 : 0, 1);
 
+// 18. Two vehicles in one year (deemed cost each, fixed cost pro-rated by days), capped at the allowance
+y = year(2027, d => { d.irp5 = irp({ 3601: 400000, 3701: 150000 }); d.travel = { enabled: true, vehicles: [
+  Object.assign(E.emptyVehicle(1), { method: 'deemed', vehicleValue: 400000, daysUsed: 182, totalKm: 15000, businessKm: 8000 }),
+  Object.assign(E.emptyVehicle(2), { method: 'deemed', vehicleValue: 200000, daysUsed: 183, totalKm: 12000, businessKm: 5000 }) ] }; });
+r = E.compute(client(), y, P(2027), CODES);
+const v1 = (125393 * 182 / 365 / 15000 + 1.734 + 0.74) * 8000, v2 = (68487 * 183 / 365 / 12000 + 1.484 + 0.614) * 5000;
+eq('vehicle 1', r.travel.vehicles[0].deemed, v1, 1);
+eq('vehicle 2', r.travel.vehicles[1].deemed, v2, 1);
+eq('two vehicles total', r.travel.chosen, Math.min(150000, v1 + v2), 2);
+
+// 19. Two company cars, IRP5 total split by calculated value
+y = year(2027, d => { d.irp5 = irp({ 3601: 500000, 3802: 150000 }); d.companyCars = [Object.assign(E.emptyCompanyCar(1), { determinedValue: 400000, months: 6 }), Object.assign(E.emptyCompanyCar(2), { determinedValue: 200000, months: 6 })]; });
+r = E.compute(client(), y, P(2027), CODES);
+eq('car split 1', r.companyCar.cars[0].value, 100000, 0.01);
+eq('car split 2', r.companyCar.cars[1].value, 50000, 0.01);
+eq('no reduction without km', r.companyCar.reduction, 0);
+
+// 20. Home office: employee, 12% of home, laptop bought in year, internet disallowed
+y = year(2027, d => { d.irp5 = irp({ 3601: 600000 }); d.homeOffice = Object.assign(E.emptyHomeOffice(), { enabled: true, basis: 'employee', exclusive: true, equipped: true, mainlyAtHome: true, officeArea: 12, homeArea: 100,
+  costs: Object.assign(E.emptyHomeOffice().costs, { bondInterest: 60000, rates: 12000, electricity: 18000, other: 10000 }),
+  assets: [{ desc: 'Laptop', type: 'laptop', cost: 24000, years: 2, purchaseDate: '2026-09-15', businessPct: 100 }, { desc: 'Chair', type: 'furniture', cost: 3500, years: 6, purchaseDate: '2026-05-01', businessPct: 100 }],
+  otherCosts: [{ desc: 'Internet', amount: 6000 }] }); });
+r = E.compute(client(), y, P(2027), CODES);
+eq('ho premises', r.homeOffice.premises, 100000 * 0.12);
+eq('ho laptop 6 months of 2 years', r.homeOffice.assets[0].claim, 24000 / 2 * 6 / 12);
+eq('ho small item', r.homeOffice.assets[1].claim, 3500);
+eq('ho internet disallowed for employee', r.homeOffice.other, 0);
+eq('ho TI', r.taxableIncome, 600000 - 12000 - 6000 - 3500);
+y.homeOffice.mainlyAtHome = false;
+r = E.compute(client(), y, P(2027), CODES);
+eq('ho not eligible: only wear and tear', r.homeOffice.total, 9500);
+// laptop bought 2 years earlier is fully written off
+eq('laptop written off', E.assetWearTear({ cost: 24000, years: 2, purchaseDate: '2024-03-01' }, P(2027)).claim, 0);
+eq('desktop year 2 of 3', E.assetWearTear({ cost: 30000, years: 3, purchaseDate: '2025-03-01' }, P(2027)).claim, 10000);
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -4,7 +4,8 @@
 const App = {
   async init() {
     const d = window.intax ? await window.intax.load() : { clients: [], settings: null, taxpacks: {} };
-    S.clients = d.clients || []; S.overrides = d.taxpacks || {}; S.dataDir = d.dataDir || ''; S.version = d.version || '';
+    S.clients = d.clients || [];
+    S.clients.forEach(c => Object.values(c.years || {}).forEach(y => E.migrateYear(y))); S.overrides = d.taxpacks || {}; S.dataDir = d.dataDir || ''; S.version = d.version || '';
     S.settings = E.deepMerge(E.clone(DEFAULT_SETTINGS), d.settings || {});
     S.year = YEARS.includes(S.settings.lastYear) ? S.settings.lastYear : YEARS[YEARS.length - 1];
     S.clientId = S.clients.some(c => c.id === S.settings.lastClient) ? S.settings.lastClient : (S.clients[0] || {}).id || null;

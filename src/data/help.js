@@ -44,7 +44,8 @@ const ARTICLES = [
   A('logbook', 'Logbook – deemed cost vs actual cost', 'travel', 'logbook deemed cost actual cost fixed cost fuel maintenance kilometre table', ['3701'],
     `<p><b>Deemed cost:</b> use the SARS cost table for the vehicle value (incl. VAT). Rate per km = fixed cost ÷ total km + fuel (if you paid all fuel) + maintenance (if you paid all maintenance). Multiply by business km.</p>
      <p><b>Actual cost:</b> total fuel, maintenance, insurance, licence, finance interest and wear-and-tear (cost over 7 years) × business km ÷ total km.</p>
-     <p>The planner calculates both and picks the better one. The claim cannot exceed the allowance received.</p>`),
+     <p>The planner calculates both and picks the better one. The claim cannot exceed the allowance received.</p>
+     <p><b>More than one vehicle:</b> add each vehicle with its own value, days used and kilometres. Each is calculated separately (fixed cost pro-rated for the days used) and the total is limited to the allowance.</p>`),
   A('reimbursive', 'Reimbursive travel (3702 / 3703)', 'travel', 'reimbursive per km rate prescribed rate 4.95', ['3702', '3703'],
     `<p>Reimbursement per business kilometre up to the prescribed rate (R4.95/km for 2027) is not taxable (3703) if no other travel compensation is paid. Amounts above it are taxable (3702).</p>`),
   A('company-car', 'Company car fringe benefit (3802)', 'companycar', 'company car use of motor vehicle fringe 3.5% 3.25%', ['3802', '3816'],
@@ -61,9 +62,10 @@ const ARTICLES = [
      <p>Any excess carries forward to later years or reduces tax on lump sums.</p>`),
   A('donations', 'Donations (s18A)', 'donations', 'donations pbo s18a certificate 10% charity', ['4030'],
     `<p>Donations to approved public benefit organisations with a <b>section 18A receipt</b> are deductible, limited to <b>10%</b> of taxable income. The excess carries forward.</p>`),
-  A('home-office', 'Home office expenses', 'deductions', 'home office study work from home rent bond interest rates s23b', [],
+  A('home-office', 'Working from home – home office expenses', 'homeoffice', 'home office study work from home wfh remote rent bond interest rates s23b laptop desk', [],
     `<p>Allowed only if the room is used <b>regularly and exclusively</b> for work and specifically equipped for it, and either more than 50% of your duties are performed there or more than 50% of your income is commission/independent work.</p>
-     <p>Claim the floor-area percentage of rent or bond interest, rates, electricity, cleaning and repairs, plus wear-and-tear on office equipment.</p>`),
+     <p>Claim the floor-area percentage of rent or bond interest, rates, electricity, water, cleaning, repairs and building insurance, for the months worked from home. Wear-and-tear on work equipment (laptop, desk, chair) is allowed separately – items under R7 000 are written off in full.</p>
+     <p>Salaried employees cannot deduct phone, internet or stationery (s23(m)); commission earners and business owners can. The office part of the home may later lose part of the primary residence exclusion.</p>`),
   A('interest', 'Interest income and exemption', 'investments', 'interest exemption savings 23800 34500 local foreign', [],
     `<p>Local interest is exempt up to <b>R23 800</b> a year (under 65) or <b>R34 500</b> (65 and older). Foreign interest is fully taxable. Enter the total from your IT3(b) certificates.</p>`),
   A('dividends', 'Dividends – local, REIT and foreign', 'investments', 'dividends shares dividend withholding tax 20% reit foreign exempt', [],
@@ -114,8 +116,8 @@ const ARTICLES = [
     `<p>When the provisional tax and PAYE paid are less than the normal tax on assessment, SARS charges interest from the <b>effective date</b> (30 September for most individuals, or 31 August when taxable income is R50 000 or less) until the assessment. A third (top-up) payment before that date avoids it.</p>`),
   A('documents', 'Documents to keep', 'documents', 'documents records keep five years certificates supporting', [],
     `<p>Keep all certificates, invoices, logbooks and statements that support a return for at least <b>five years</b> from the date the return was submitted. SARS can ask for them in a verification or audit.</p>`),
-  A('fees-invoices', 'Recording time and issuing invoices', 'fees', 'fees invoice billing time hours rate vat', [],
-    `<p>Record work done per client on <b>Time & fees</b>. Hours × rate fills the amount. <b>Create invoice</b> bills all unbilled items on your letterhead (with VAT if you are registered) and numbers invoices automatically.</p>`),
+  A('time-records', 'Recording time per client', 'fees', 'time records hours fees rate work done', [],
+    `<p>Record work done per client on <b>Time records</b>: date, tax year, description, hours and rate (hours × rate fills the value). The practice <b>Time records</b> screen and report summarise hours and value per client – use them to bill from your own accounting system.</p>`),
   A('update-tables', 'Updating tax tables after the Budget', 'taxtables', 'update tax tables budget new year rates edit import', [],
     `<p>All rates, rebates, thresholds, credits, CGT and travel tables are stored in editable tax packs. Open <b>Tax Tables</b>, choose the year and change any value, or import a pack file. Reset restores the SARS defaults shipped with the app.</p>`)
 ];
@@ -128,7 +130,7 @@ const SYNONYMS = {
   freelance: 'business', side: 'business freelance', invoice: 'business', salary: 'irp5 3601', bonus: '3605', paye: 'irp5 provisional',
   late: 'penalty late', penalty: 'penalty underestimation late', topup: 'third', 'top-up': 'third', return: 'itr12', efiling: 'itr12',
   resign: 'withdrawal lump', retrench: 'lump severance', payout: 'lump sum', abroad: 'foreign', overseas: 'foreign', expat: 'foreign',
-  savings: 'interest tfsa', bank: 'interest', office: 'home office', study: 'home office', laptop: 'wear tear', computer: 'wear tear'
+  savings: 'interest tfsa', bank: 'interest', office: 'home office', study: 'home office', wfh: 'home office working', remote: 'home office working', cars: 'vehicle travel company car', vehicles: 'vehicle travel logbook', laptop: 'wear tear', computer: 'wear tear'
 };
 
 function search(query, codeList) {

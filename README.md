@@ -33,11 +33,23 @@ A Windows desktop tax planning workstation for South African tax practitioners. 
 - **What-if planner:** test RA top-ups, donations, bonuses and asset sales before year end.
 - **Tax tables screen:** edit brackets, rebates, thresholds, medical credits, CGT, retirement cap, travel tables and lump sum tables for any year. You can also import or export them, or reset to the SARS defaults.
 
+## New in 1.2
+- **Several vehicles per tax year:**
+  - Travel logbook claims: each vehicle has its own value, days used (fixed cost pro-rated), kilometres and costs, and its own deemed or actual method. The total is limited to the travel allowance.
+  - Company cars: the IRP5 3802/3816 total is split between the cars, or you enter the value per car. Each car gets its own logbook reduction.
+- **Working from home:**
+  - Checks the s23(b) requirements for employees, commission earners and business owners.
+  - Office share of home running costs, by floor area and months.
+  - Wear-and-tear on work equipment using SARS IN 47 write-off periods; items under R7 000 are written off in full.
+  - Other work costs, which salaried employees cannot deduct (s23(m)).
+  - New wizard, home office report, and a warning about the primary residence exclusion.
+- **Invoicing removed:** Time & fees is now **Time records** (hours and value per client) with a practice summary and report. Billing happens in your own accounting system.
+
 ## New in 1.1
 - **Practice dashboard:** client count, payments due in the next 30 days, overdue items, unbilled fees and a work-status pipeline.
-- **Deadlines & payments:** every client's 1st, 2nd and top-up payments, assessment payment dates, objection deadlines and unpaid invoices in one list. Filter it and export to CSV or PDF.
+- **Deadlines & payments:** every client's 1st, 2nd and top-up payments, assessment payment dates, objection deadlines in one list. Filter it and export to CSV or PDF.
 - **Documents checklist:** generated from each client's income and deductions. Tick documents as they arrive and send a document request letter.
-- **Time & fees:** record hours or fees per client and issue numbered invoices (tax invoices if you are VAT registered) with your bank details. The practice fee register shows unbilled, unpaid and paid work.
+- **Time records:** hours and value per client.
 - **Change log:** an audit trail of every change, with date, time and old and new values.
 - **Year lock:** locks a tax year after submission. **PIN lock** with auto-lock when idle protects client data (POPIA).
 - **Roll forward:** copies a year to the next with a growth % as a base for next year's provisional estimates.
@@ -51,9 +63,9 @@ A Windows desktop tax planning workstation for South African tax practitioners. 
 - **New reports:**
   - Comparative computation, tax rate analysis, retirement & savings planning
   - Company car schedule, IRP6 capture sheet, assessment reconciliation
-  - Document request letter, engagement letter, invoice, change log
-  - Deadlines, work in progress, fee register, provisional tax summary for all clients
-- **CSV exports:** computation, client register, deadlines and fees.
+  - Document request letter, engagement letter, change log
+  - Deadlines, work in progress, time records, provisional tax summary for all clients
+- **CSV exports:** computation, client register, deadlines and time records.
 
 ## Developers
 ```

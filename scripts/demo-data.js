@@ -13,7 +13,14 @@ y.investments = { localInterest: 42000, foreignInterest: 0, localDividends: 1500
 y.cgt.items = [{ desc: '1 200 Satrix 40 units', type: 'shares', date: '2026-09-15', proceeds: 210000, baseCost: 95000, costs: 800 }, { desc: '0.15 BTC', type: 'crypto', date: '2026-11-02', proceeds: 230000, baseCost: 120000, costs: 1200 }];
 y.deductions.raContrib = 60000; y.deductions.donations = 12000;
 y.medical = { onScheme: true, months: 12, dependants: 2, contributions: 0, qme: 25000, disability: false };
-y.travel = Object.assign(y.travel, { enabled: true, method: 'best', vehicleValue: 520000, totalKm: 32000, businessKm: 14000, daysUsed: 365, fuelBorne: true, maintBorne: true });
+y.travel = { enabled: true, vehicles: [
+  Object.assign(E.emptyVehicle(1), { name: 'Toyota Corolla Cross', registration: 'CA 123-456', vehicleValue: 420000, daysUsed: 200, totalKm: 18000, businessKm: 9000 }),
+  Object.assign(E.emptyVehicle(2), { name: 'VW Polo (from October)', registration: 'CA 654-321', vehicleValue: 320000, daysUsed: 165, totalKm: 12000, businessKm: 5500 }) ] };
+y.flags.homeOffice = true;
+y.homeOffice = Object.assign(E.emptyHomeOffice(), { enabled: true, basis: 'employee', exclusive: true, equipped: true, mainlyAtHome: true, officeArea: 14, homeArea: 180, months: 12,
+  costs: Object.assign(E.emptyHomeOffice().costs, { bondInterest: 96000, rates: 18000, electricity: 26000, water: 7000, insurance: 6000 }),
+  assets: [{ desc: 'MacBook Pro', type: 'laptop', cost: 38000, years: 2, purchaseDate: '2026-04-10', businessPct: 90 }, { desc: 'Office desk', type: 'furniture', cost: 9500, years: 6, purchaseDate: '2025-06-01', businessPct: 100 }, { desc: 'Office chair', type: 'furniture', cost: 4200, years: 6, purchaseDate: '2026-05-15', businessPct: 100 }],
+  otherCosts: [{ desc: 'Fibre internet (work portion)', amount: 4800 }] });
 y.provisional.basicAmount = { lastAssessedYear: 2026, lastAssessedTI: 905000, lessCapitalGain: 0, lessLumpSums: 0 };
 y.provisional.p1.paid = 30000; y.provisional.p1.datePaid = '2026-08-29';
 y.status = 'In progress';
@@ -38,11 +45,12 @@ const c3 = Object.assign(E.emptyClient(), { id: 'demo3', firstName: 'Pieter', su
 const w = E.emptyYear(2027);
 Object.assign(w.flags, { employment: true, companyCar: true, rental: true, investments: true, provisional: true });
 w.irp5 = [irp('Nel Logistics (Pty) Ltd', { 3601: 540000, 3802: 151200, 4102: 160000, 4005: 24000 })];
-w.companyCar = { enabled: true, determinedValue: 360000, maintenancePlan: true, months: 12, totalKm: 40000, businessKm: 22000, fuelBorne: true, maintBorne: false, insurance: 0, licence: 0 };
+w.companyCars = [Object.assign(E.emptyCompanyCar(1), { name: 'Ford Ranger', registration: 'ND 11-22', determinedValue: 360000, maintenancePlan: true, months: 8, totalKm: 26000, businessKm: 15000, fuelBorne: true }),
+  Object.assign(E.emptyCompanyCar(2), { name: 'Toyota Hilux', registration: 'ND 33-44', determinedValue: 480000, maintenancePlan: true, months: 4, totalKm: 14000, businessKm: 7000, fuelBorne: true })];
 w.rental = [{ property: 'Unit 4, Seaview', rent: 96000, sharePct: 100, expenses: [{ desc: 'Levies', amount: 18000 }] }];
 w.investments.localInterest = 64000;
 w.tfsa = { contributions: 40000, priorTotal: 180000 };
 c3.years[2027] = w;
 
-const settings = { practice: { name: 'Bigoke Tax & Accounting', practitioner: 'A. Practitioner', prNumber: 'PR-0000000', regBody: 'SAIT', address: '1 Main Road\nJohannesburg, 2000', phone: '011 000 0000', email: 'tax@example.co.za', website: '', logo: '', disclaimer: 'This computation is an estimate prepared for tax planning purposes from information supplied by the taxpayer. Final liability is determined by SARS on assessment.' }, billing: { vatRegistered: true, vatNumber: '4000000000', vatRate: 15, invoicePrefix: 'BT', nextInvoice: 101, defaultRate: 950, paymentTerms: 30, bankName: 'Example Bank', accountName: 'Bigoke Tax & Accounting', accountNumber: '000000000', branchCode: '000000', engagementFee: 'R950 per hour, estimated at R4 500 for the full year.' }, lastClient: 'demo1', lastYear: 2027, interestRate: 10.5, reportAccent: '#0b7a75' };
+const settings = { practice: { name: 'Bigoke Tax & Accounting', practitioner: 'A. Practitioner', prNumber: 'PR-0000000', regBody: 'SAIT', address: '1 Main Road\nJohannesburg, 2000', phone: '011 000 0000', email: 'tax@example.co.za', website: '', logo: '', disclaimer: 'This computation is an estimate prepared for tax planning purposes from information supplied by the taxpayer. Final liability is determined by SARS on assessment.' }, billing: { defaultRate: 950, paymentTerms: 30, engagementFee: 'R950 per hour, estimated at R4 500 for the full year.' }, lastClient: 'demo1', lastYear: 2027, interestRate: 10.5, reportAccent: '#0b7a75' };
 module.exports = { clients: [c1, c2, c3], settings };

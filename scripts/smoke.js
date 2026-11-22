@@ -53,9 +53,11 @@ app.whenReady().then(async () => {
   }
   // practice features
   await js(`S.clientId='demo1'; S.year=2027; App.route('fees')`);
-  await js(`ACTIONS2.invoice(); true`); await sleep(200); await js(`document.getElementById('cbOk').click()`); await sleep(600);
-  await shot('invoice-preview'); await js(`document.querySelectorAll('.modal-back').forEach(m=>m.remove())`);
-  const invs = await js(`cur().invoices.length`); if (invs !== 1) errors.push('invoice not created: ' + invs);
+  const nv = await js(`result().travel.vehicles.length`); if (nv !== 2) errors.push('expected 2 vehicles, got ' + nv);
+  await js(`App.route('travel')`); await shot('screen-travel-2vehicles');
+  await js(`App.route('homeoffice')`); await shot('screen-homeoffice'); await js(`document.getElementById('content').scrollTop = 99999; true`); await shot('screen-homeoffice-bottom');
+  await js(`ACTIONS2.addvehicle(); true`); await sleep(150); const nv3 = await js(`yd().travel.vehicles.length`); if (nv3 !== 3) errors.push('add vehicle failed'); await js(`yd().travel.vehicles.pop(); App.refresh(); true`);
+  await js(`App.route('timesummary')`); await shot('screen-timesummary');
   await js(`App.route('fees')`); await shot('screen-fees');
   await js(`S.year=2026; App.route('employment')`); await shot('screen-locked-2026');
   const dis = await js(`document.querySelectorAll('#content input:disabled').length`); if (!dis) errors.push('locked year inputs not disabled');
@@ -73,7 +75,7 @@ app.whenReady().then(async () => {
   const rolled = await js(`S.year`); if (rolled !== 2027) errors.push('roll forward did not switch year: ' + rolled);
   await js(`S.clientId='demo1'; S.year=2027; App.route('practice')`); await shot('screen-practice-after');
   await js(`App.route('deadlines')`); await shot('screen-deadlines');
-  for (const r of ['practice','deadlines','billing','documents','fees','auditlog','companycar','assessment']) { await js(`App.route('${r}')`); await bad('v1.1 ' + r); }
+  for (const r of ['practice','deadlines','timesummary','documents','fees','auditlog','companycar','assessment','homeoffice','travel','deductions','settings']) { await js(`App.route('${r}')`); await bad('v1.1 ' + r); }
 
   // back to demo client for reports
   await js(`S.clientId='demo1'; S.year=2027; App.route('whatif'); S.scratch.wi={ra:40000,donation:0,income:0,bonus:0,expenses:0,medical:0,businessKm:0,gain:0}; App.refresh();`);
@@ -82,7 +84,7 @@ app.whenReady().then(async () => {
   await js(`const g=document.getElementById('globalSearch'); g.value='3701'; g.dispatchEvent(new Event('input'));`); await shot('global-search-3701');
   await js(`document.getElementById('searchResults').classList.add('hidden')`);
 
-  const reports = await js(`REPORTS.list().map(r=>r.id).concat(['pack','invoice'])`);
+  const reports = await js(`REPORTS.list().map(r=>r.id).concat(['pack'])`);
   for (const id of reports) {
     const rep = await js(`(()=>{try{ if('${id}'==='companycar'){S.clientId='demo3'} else {S.clientId='demo1'}; S.year = '${id}'==='assessment' ? 2026 : 2027; return REPORTS.build('${id}')}catch(e){return {error:e.message}}})()`);
     if (rep.error) { errors.push('report ' + id + ': ' + rep.error); continue; }

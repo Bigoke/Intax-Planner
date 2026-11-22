@@ -361,7 +361,7 @@ SCREENS.whatif = () => {
   if (E.n(W.income) || E.n(W.expenses)) y2.business.push({ name: 'What-if', turnover: E.n(W.income), expenses: [{ desc: 'Extra expenses', amount: E.n(W.expenses) }] });
   if (E.n(W.bonus)) y2.irp5.push({ employer: 'What-if', codes: [{ code: '3605', amount: E.n(W.bonus) }] });
   y2.medical.qme = E.n(y2.medical.qme) + E.n(W.medical);
-  if (E.n(W.businessKm)) y2.travel.businessKm = E.n(y2.travel.businessKm) + E.n(W.businessKm);
+  E.migrateYear(y2); if (E.n(W.businessKm) && y2.travel.vehicles.length) { const v0 = y2.travel.vehicles[0]; v0.businessKm = Math.min(E.n(v0.totalKm), E.n(v0.businessKm) + E.n(W.businessKm)); }
   if (E.n(W.gain)) y2.cgt.items.push({ desc: 'What-if disposal', type: 'shares', proceeds: E.n(W.gain), baseCost: 0 });
   const alt = E.compute(c, y2, pack(), codeList());
   S.scratch.wiResult = { base, alt };

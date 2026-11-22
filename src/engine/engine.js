@@ -76,13 +76,14 @@ function emptyYear(year) {
     other: [],
     deductions: { raContrib: 0, raCarryForward: 0, donations: 0, donationsCarryForward: 0, homeOffice: 0, assessedLossBF: 0, other: [] },
     medical: { onScheme: false, months: 12, dependants: 0, contributions: 0, qme: 0, disability: false },
-    companyCar: { enabled: false, determinedValue: 0, maintenancePlan: false, months: 12, totalKm: 0, businessKm: 0, fuelBorne: false, maintBorne: false, insurance: 0, licence: 0 },
+    companyCars: [],
+    homeOffice: emptyHomeOffice(),
     tfsa: { contributions: 0, priorTotal: 0 },
     cop: null, // null = follow marital status; true/false = override
     assessment: { date: '', reference: '', taxableIncome: null, normalTax: null, paye: null, provisional: null, interest: 0, penalties: 0, balance: null, notes: '' },
     finalOpts: { expectedAssessmentDate: '' },
     docs: {}, docsCustom: [],
-    travel: { enabled: false, method: 'best', vehicleValue: 0, totalKm: 0, businessKm: 0, daysUsed: 365, fuelBorne: true, maintBorne: true, actual: { fuel: 0, maintenance: 0, insurance: 0, licence: 0, interest: 0, lease: 0 }, vehicleCost: 0 },
+    travel: { enabled: false, vehicles: [] },
     provisional: {
       basicAmount: { lastAssessedYear: year - 1, lastAssessedTI: 0, lessCapitalGain: 0, lessLumpSums: 0 },
       p1: { useBasic: false, estimateTI: null, paye: null, paid: 0, datePaid: '' },
@@ -92,6 +93,37 @@ function emptyYear(year) {
     },
     notes: ''
   };
+}
+function emptyVehicle(i) {
+  return { name: 'Vehicle ' + (i || 1), registration: '', vehicleValue: 0, vehicleCost: 0, daysUsed: 365, totalKm: 0, businessKm: 0, fuelBorne: true, maintBorne: true, method: 'best', actual: { fuel: 0, maintenance: 0, insurance: 0, licence: 0, interest: 0, lease: 0 } };
+}
+function emptyCompanyCar(i) {
+  return { name: 'Company car ' + (i || 1), registration: '', determinedValue: 0, maintenancePlan: false, months: 12, irp5Value: null, totalKm: 0, businessKm: 0, fuelBorne: false, maintBorne: false, insurance: 0, licence: 0 };
+}
+function emptyHomeOffice() {
+  return { enabled: false, basis: 'employee', exclusive: false, equipped: false, mainlyAtHome: false, officeArea: 0, homeArea: 0, months: 12,
+    costs: { rent: 0, bondInterest: 0, rates: 0, electricity: 0, water: 0, cleaning: 0, repairs: 0, insurance: 0, security: 0, other: 0 },
+    assets: [], otherCosts: [] };
+}
+// Upgrade data saved by earlier versions (single vehicle / single company car). Safe to call repeatedly.
+function migrateYear(y) {
+  if (!y) return y;
+  y.travel = y.travel || { enabled: false, vehicles: [] };
+  const legacyT = y.travel.vehicleValue !== undefined || y.travel.totalKm !== undefined;
+  if (!Array.isArray(y.travel.vehicles) || (!y.travel.vehicles.length && legacyT)) {
+    const t = y.travel, has = n(t.vehicleValue) || n(t.totalKm) || n(t.businessKm);
+    y.travel = { enabled: !!t.enabled, vehicles: has ? [Object.assign(emptyVehicle(1), { vehicleValue: n(t.vehicleValue), vehicleCost: n(t.vehicleCost), daysUsed: n(t.daysUsed) || 365, totalKm: n(t.totalKm), businessKm: n(t.businessKm), fuelBorne: t.fuelBorne !== false, maintBorne: t.maintBorne !== false, method: t.method || 'best', actual: Object.assign(emptyVehicle(1).actual, t.actual || {}) })] : [] };
+  }
+  if (!Array.isArray(y.companyCars) || (!y.companyCars.length && y.companyCar)) {
+    const c = y.companyCar;
+    y.companyCars = c && (c.enabled || n(c.determinedValue)) ? [Object.assign(emptyCompanyCar(1), c, { irp5Value: null })] : [];
+    y.companyCars.forEach(x => delete x.enabled);
+  }
+  delete y.companyCar;
+  if (!y.homeOffice) y.homeOffice = emptyHomeOffice();
+  y.homeOffice.costs = Object.assign(emptyHomeOffice().costs, y.homeOffice.costs || {});
+  y.homeOffice.assets = y.homeOffice.assets || []; y.homeOffice.otherCosts = y.homeOffice.otherCosts || [];
+  return y;
 }
 function emptyClient() {
   return { id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), firstName: '', surname: '', idNumber: '', taxRef: '', dob: '', email: '', phone: '', address: '', practitioner: '', notes: '', years: {}, created: new Date().toISOString() };
@@ -149,6 +181,72 @@ function travelClaim(tr, pack, allowance) {
   if (allowance <= 0) res.notes.push('A travel deduction can only be claimed against a travel allowance (codes 3701/3702) or by someone running a business.');
   else if (raw > allowance) res.notes.push('Claim limited to the travel allowance received.');
   res.businessPct = r2(bus / total * 100);
+  return res;
+}
+
+// Several vehicles: each is calculated separately (fixed cost pro-rated for the days it was used),
+// and the total claim is limited to the travel allowance received.
+function travelClaims(tr, pack, allowance) {
+  const res = { vehicles: [], deemed: 0, actual: 0, uncapped: 0, chosen: 0, method: 'none', notes: [] };
+  if (!tr || !tr.enabled) return res;
+  res.vehicles = (tr.vehicles || []).map((v, i) => Object.assign(travelClaim(Object.assign({}, v, { enabled: true }), pack, Infinity), { name: v.name || 'Vehicle ' + (i + 1), registration: v.registration || '', input: v }));
+  res.vehicles.forEach(v => { v.notes = v.notes.filter(x => !/allowance/.test(x)); });
+  res.deemed = r2(sum(res.vehicles, v => v.deemed)); res.actual = r2(sum(res.vehicles, v => v.actual));
+  res.uncapped = r2(sum(res.vehicles, v => v.uncapped || 0));
+  res.chosen = r2(Math.min(res.uncapped, Math.max(0, allowance)));
+  const methods = [...new Set(res.vehicles.filter(v => v.uncapped).map(v => v.method))];
+  res.method = methods.length === 1 ? methods[0] : methods.length ? 'mixed' : 'none';
+  if (!res.vehicles.length) res.notes.push('Add the vehicle(s) used for business travel.');
+  res.vehicles.forEach(v => v.notes.forEach(x => res.notes.push(`${v.name}: ${x}`)));
+  if (res.uncapped > 0 && allowance <= 0) res.notes.push('A travel deduction can only be claimed against a travel allowance (codes 3701/3702).');
+  else if (res.uncapped > allowance) res.notes.push(`Claim of R${fmt(res.uncapped)} limited to the travel allowance received (R${fmt(allowance)}).`);
+  return res;
+}
+
+// ---------- home office / working from home (s11(a), s23(b), s11(e)) ----------
+const IN47_ASSETS = [
+  ['laptop', 'Laptop / notebook computer', 2], ['desktop', 'Desktop computer', 3], ['printer', 'Printer (personal)', 3], ['phone', 'Cellphone', 2],
+  ['furniture', 'Office furniture (desk, chair, shelves)', 6], ['electronic', 'Other electronic office equipment', 3], ['software', 'Computer software (bought)', 2], ['other', 'Other equipment', 5]
+];
+function monthsDiff(fromIso, toIso) { const a = new Date(fromIso + 'T00:00:00Z'), b = new Date(toIso + 'T00:00:00Z'); return (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth()); }
+function assetWearTear(a, pack) {
+  const cost = n(a.cost), years = Math.max(1, n(a.years) || 1), bpct = Math.min(100, Math.max(0, a.businessPct === undefined || a.businessPct === '' ? 100 : n(a.businessPct))) / 100;
+  const out = { desc: a.desc || '', cost, years, businessPct: bpct * 100, claim: 0, note: '' };
+  if (!cost) return out;
+  const bought = a.purchaseDate || pack.start;
+  if (bought > pack.end) { out.note = 'Bought after this tax year'; return out; }
+  const boughtInYear = bought >= pack.start;
+  const monthsThisYear = boughtInYear ? Math.max(1, monthsDiff(bought, pack.end) + 1) : 12;
+  if (cost < 7000) { out.claim = boughtInYear ? r2(cost * bpct) : 0; out.note = boughtInYear ? 'Small item (under R7 000) written off in full' : 'Written off in full in the year bought'; return out; }
+  const yearly = cost / years;
+  const monthsBefore = boughtInYear ? 0 : Math.max(0, monthsDiff(bought, pack.start));
+  const remaining = Math.max(0, cost - yearly * monthsBefore / 12);
+  out.claim = r2(Math.min(remaining, yearly * monthsThisYear / 12) * bpct);
+  out.note = remaining <= 0 ? 'Fully written off' : `${years}-year write-off${boughtInYear ? `, ${monthsThisYear} month(s) this year` : ''}`;
+  return out;
+}
+function homeOfficeCalc(ho, pack) {
+  const res = { enabled: false, eligible: false, reasons: [], pct: 0, homeCosts: 0, premises: 0, wearTear: 0, assets: [], other: 0, otherAllowed: false, total: 0 };
+  if (!ho || !ho.enabled) return res;
+  res.enabled = true;
+  const basis = ho.basis || 'employee';
+  if (!ho.exclusive) res.reasons.push('The room must be used regularly and exclusively for work.');
+  if (!ho.equipped) res.reasons.push('The room must be specifically equipped for work.');
+  if (basis !== 'business' && !ho.mainlyAtHome) res.reasons.push(basis === 'commission' ? 'Commission earners: duties must be mainly performed outside an office provided by the employer.' : 'Employees: more than 50% of duties must be performed in the home office.');
+  res.eligible = res.reasons.length === 0;
+  res.pct = n(ho.homeArea) > 0 ? Math.min(1, n(ho.officeArea) / n(ho.homeArea)) : 0;
+  const months = Math.min(12, Math.max(0, ho.months === undefined || ho.months === '' ? 12 : n(ho.months)));
+  res.months = months;
+  res.homeCosts = r2(Object.values(ho.costs || {}).reduce((a, v) => a + n(v), 0));
+  res.premises = res.eligible ? r2(res.homeCosts * res.pct * months / 12) : 0;
+  res.assets = (ho.assets || []).map(a => assetWearTear(a, pack));
+  res.wearTear = r2(sum(res.assets, a => a.claim));
+  res.otherAllowed = basis !== 'employee';
+  res.otherClaimed = r2(sum(ho.otherCosts, o => o.amount));
+  res.other = res.otherAllowed ? res.otherClaimed : 0;
+  res.total = r2(res.premises + res.wearTear + res.other);
+  if (!res.eligible && res.homeCosts) res.reasons.push('Home running costs are not deductible until the requirements are met (wear-and-tear on work equipment is still allowed).');
+  if (!res.otherAllowed && res.otherClaimed) res.reasons.push('Salaried employees cannot deduct phone, internet and similar costs (s23(m)).');
   return res;
 }
 
@@ -236,6 +334,26 @@ function companyCarCalc(cc, pack, irpValue) {
   return res;
 }
 
+function companyCarsCalc(cars, pack, irpTotal) {
+  const list = cars || [];
+  const res = { enabled: list.length > 0, cars: [], value: 0, calculated: 0, reduction: 0, added: 0, fromIrp5: irpTotal > 0, notes: [] };
+  if (!list.length) return res;
+  const calc = list.map(c => { const rate = c.maintenancePlan ? pack.companyCar.maintenancePlan : pack.companyCar.standard; return n(c.determinedValue) * rate * Math.min(12, Math.max(0, n(c.months) || 12)); });
+  let values;
+  if (irpTotal > 0) {
+    const explicit = list.map(c => c.irp5Value === null || c.irp5Value === undefined || c.irp5Value === '' ? null : n(c.irp5Value));
+    const rest = Math.max(0, irpTotal - sum(explicit.filter(v => v !== null)));
+    const open = list.map((c, i) => explicit[i] === null ? i : -1).filter(i => i >= 0);
+    const calcOpen = sum(open.map(i => calc[i]));
+    values = list.map((c, i) => explicit[i] !== null ? explicit[i] : (calcOpen ? rest * calc[i] / calcOpen : rest / open.length));
+    if (Math.abs(sum(values) - irpTotal) > 1) res.notes.push(`Values entered per car (R${fmt(sum(values))}) differ from the IRP5 total (R${fmt(irpTotal)}).`);
+  } else { values = calc; res.added = r2(sum(calc)); }
+  res.cars = list.map((c, i) => Object.assign(companyCarCalc(Object.assign({}, c, { enabled: true }), pack, values[i]), { name: c.name || 'Company car ' + (i + 1), registration: c.registration || '', input: c }));
+  res.value = r2(sum(res.cars, c => c.value)); res.calculated = r2(sum(res.cars, c => c.calculated)); res.reduction = r2(sum(res.cars, c => c.reduction));
+  res.cars.forEach(c => c.notes.forEach(x => res.notes.push(`${c.name}: ${x}`)));
+  return res;
+}
+
 // ---------- tax by bracket ----------
 function taxByBracket(ti, brackets) {
   const out = [];
@@ -289,6 +407,7 @@ function daysBetween(a, b) { return Math.round((new Date(b + 'T00:00:00Z') - new
 // ---------- the main computation ----------
 function compute(client, y, pack, codeList, opts) {
   opts = opts || {};
+  migrateYear(y);
   const age = ageAtYearEnd(client && client.dob, pack);
   const cop = y.cop === true || ((y.cop === null || y.cop === undefined) && client && client.maritalStatus === 'Married in community of property');
   const share = cop ? 0.5 : 1;
@@ -307,9 +426,9 @@ function compute(client, y, pack, codeList, opts) {
 
   // Company car
   const carIrp = n(irp.byCode['3802']) + n(irp.byCode['3816']);
-  const car = companyCarCalc(y.companyCar, pack, carIrp);
-  let carAdded = 0;
-  if (car.enabled && !car.fromIrp5 && car.calculated) { carAdded = car.calculated; add('Employment (IRP5)', 'Company car fringe benefit (calculated, not on IRP5)', carAdded, '3802'); }
+  const car = companyCarsCalc(y.companyCars, pack, carIrp);
+  const carAdded = car.added;
+  if (carAdded) add('Employment (IRP5)', `Company car fringe benefit (calculated, not on IRP5${car.cars.length > 1 ? ', ' + car.cars.length + ' vehicles' : ''})`, carAdded, '3802');
 
   // Foreign employment
   const F = y.foreign || {};
@@ -361,10 +480,15 @@ function compute(client, y, pack, codeList, opts) {
   // Deductions
   const D = y.deductions || {};
   const travelAllowance = A.travel;
-  const travel = travelClaim(y.travel, pack, travelAllowance);
-  if (travel.chosen) add('Deductions', 'Travel expenses (' + (travel.method === 'actual' ? 'actual cost' : 'deemed cost') + ', logbook)', -travel.chosen, '', 'deduction');
+  const travel = travelClaims(y.travel, pack, travelAllowance);
+  if (travel.chosen) add('Deductions', `Travel expenses (${travel.method === 'actual' ? 'actual cost' : travel.method === 'mixed' ? 'deemed/actual' : 'deemed cost'}, logbook${travel.vehicles.length > 1 ? ', ' + travel.vehicles.length + ' vehicles' : ''})`, -travel.chosen, '', 'deduction');
   if (car.reduction) add('Deductions', 'Company car fringe benefit reduction (para 7(7)/(8), logbook)', -car.reduction, '', 'deduction');
-  const homeOffice = n(D.homeOffice); if (homeOffice) add('Deductions', 'Home office expenses', -homeOffice, '', 'deduction');
+  const ho = homeOfficeCalc(y.homeOffice, pack);
+  if (ho.premises) add('Deductions', `Home office – ${Math.round(ho.pct * 1000) / 10}% of home running costs (s11(a)/s23(b))`, -ho.premises, '', 'deduction');
+  if (ho.wearTear) add('Deductions', 'Wear-and-tear on work equipment (s11(e))', -ho.wearTear, '', 'deduction');
+  if (ho.other) add('Deductions', 'Other work-from-home expenses', -ho.other, '', 'deduction');
+  const hoManual = n(D.homeOffice); if (hoManual) add('Deductions', 'Home office expenses (manual amount)', -hoManual, '', 'deduction');
+  const homeOffice = ho.total + hoManual;
   const otherDed = sum(D.other, x => x.amount); (D.other || []).filter(x => n(x.amount)).forEach(x => add('Deductions', x.desc || 'Other deduction', -n(x.amount), '', 'deduction'));
   let tiBeforeLoss = incomeTotal - travel.chosen - car.reduction - homeOffice - otherDed;
   const lossBF = n(D.assessedLossBF);
@@ -426,7 +550,7 @@ function compute(client, y, pack, codeList, opts) {
     business, businessNet: r2(businessNet), rental, rentalNet: r2(rentalNet),
     interest: { local: li, exempt: r2(liExempt), foreign: fi, limit: exemptLimit }, dividends: { local: n(I.localDividends) * share, reit, foreign: fd, foreignExempt: r2(fdExempt), dwt: n(I.dividendsTaxWithheld) },
     investNet: r2(investNet), otherIncome: r2(otherTaxable), savingsWithdrawal: r2(savingsWd),
-    incomeTotal: r2(incomeTotal), travel, homeOffice, otherDeductions: r2(otherDed), assessedLossBF: lossBF,
+    incomeTotal: r2(incomeTotal), travel, otherDeductions: r2(otherDed), assessedLossBF: lossBF,
     ra: { contributions: r2(raContributions), carriedIn: n(D.raCarryForward), remuneration: r2(remuneration), limitPct: r2(raLimitPct), cap: pack.retirement.cap, allowed: r2(raAllowed), carryForward: r2(raCF) },
     cgt, donations: { available: r2(donAvailable), allowed: r2(donAllowed), carryForward: r2(donAvailable - donAllowed) },
     taxableIncome: r2(ti), tiExclCG: r2(Math.max(0, ti - cgt.taxableGain)), assessedLossCF: r2(assessedLossCF),
@@ -436,7 +560,7 @@ function compute(client, y, pack, codeList, opts) {
     paye: r2(paye), provisionalPaid: r2(provisionalPaid), credits: r2(credits), balance: r2(balance),
     effectiveRate: incomeTotal > 0 ? r2(normalTaxPayable / Math.max(1, incomeTotal + cgt.taxableGain) * 100) : 0,
     marginalRate: marginalRate(pack.brackets, ti),
-    cop, share, companyCar: car,
+    cop, share, companyCar: car, homeOffice: ho, homeOfficeTotal: r2(homeOffice),
     totalDeductions: r2(travel.chosen + car.reduction + homeOffice + otherDed + lossBF + raAllowed + donAllowed),
     tfsa: { contributions: tContrib, priorTotal: tPrior, annualLimit: pack.tfsa.annual, lifetimeLimit: pack.tfsa.lifetime, annualRoom: r2(Math.max(0, pack.tfsa.annual - tContrib)), lifetimeRoom: r2(Math.max(0, pack.tfsa.lifetime - tPrior - tContrib)), excess: r2(tfsaExcess), tax: tfsaTax },
     brackets: taxByBracket(ti, pack.brackets)
@@ -550,6 +674,7 @@ function warnings(client, y, pack, res) {
   if (!client.dob) w.push({ level: 'warn', text: 'Date of birth is missing – age rebates and the interest exemption assume under 65.', go: 'client' });
   if (res.ra.carryForward > 0) w.push({ level: 'info', text: `R${fmt(res.ra.carryForward)} of retirement contributions exceed this year's limit and carry forward to next year.`, go: 'retirement' });
   if (res.ra.allowed < Math.min(pack.retirement.cap, res.ra.limitPct) && res.taxableIncome > res.threshold) w.push({ level: 'tip', text: `You could still contribute up to R${fmt(Math.min(pack.retirement.cap, res.ra.limitPct) - res.ra.allowed)} more to a retirement annuity and deduct it this year (marginal rate ${Math.round(res.marginalRate * 100)}%).`, go: 'retirement' });
+  if (res.homeOffice.enabled) res.homeOffice.reasons.forEach(t => w.push({ level: 'warn', text: 'Home office: ' + t, go: 'homeoffice' }));
   if (res.irp5.agg.travel > 0 && !(y.travel && y.travel.enabled)) w.push({ level: 'tip', text: 'You received a travel allowance but have not entered a logbook claim. Use the Travel wizard to claim business kilometres.', go: 'travel' });
   if (res.travel.notes && res.travel.notes.length && y.travel && y.travel.enabled) res.travel.notes.forEach(t => w.push({ level: 'info', text: t, go: 'travel' }));
   if (res.donations.carryForward > 0) w.push({ level: 'info', text: `R${fmt(res.donations.carryForward)} of donations exceed the 10% limit and carry forward.`, go: 'donations' });
@@ -560,6 +685,7 @@ function warnings(client, y, pack, res) {
   if (nonEmp > 30000 && !(y.flags && y.flags.provisional)) w.push({ level: 'warn', text: 'You have more than R30 000 of income not taxed through PAYE – you are probably a provisional taxpayer and must submit IRP6 returns.', go: 'provisional' });
   if (res.provisional && !res.provisional.penalty.ok && y.flags && y.flags.provisional) w.push({ level: 'warn', text: `Second provisional estimate is below the safe level (R${fmt(res.provisional.penalty.targetTI)}). Possible underestimation penalty of R${fmt(res.provisional.penalty.amount)}.`, go: 'p2' });
   if (res.tfsa.excess > 0) w.push({ level: 'warn', text: `Tax-free savings contributions exceed the limit by R${fmt(res.tfsa.excess)} – 40% tax of R${fmt(res.tfsa.tax)} is payable.`, go: 'investments' });
+  (res.companyCar.notes || []).forEach(t => w.push({ level: 'info', text: t, go: 'companycar' }));
   if (res.companyCar.fromIrp5 && !res.companyCar.enabled) w.push({ level: 'tip', text: 'A company car fringe benefit is on the IRP5. With a logbook it can be reduced for business kilometres and private costs paid personally.', go: 'companycar' });
   if (res.cop) w.push({ level: 'info', text: 'Married in community of property: 50% of interest, dividends, rental income and capital gains is taxed in each spouse’s hands.', go: 'client' });
   if (res.recon && res.recon.entered && res.recon.material) w.push({ level: 'warn', text: `The SARS assessment differs from the plan. Objection deadline: ${res.recon.objectionDeadline || 'enter the assessment date'}.`, go: 'assessment' });
@@ -573,6 +699,6 @@ function fmt(v, dec) {
   return x.toLocaleString('en-ZA', { minimumFractionDigits: dec === undefined ? 0 : dec, maximumFractionDigits: dec === undefined ? 0 : dec }).replace(/ /g, ' ');
 }
 
-const api = { companyCarCalc, taxByBracket, addBusinessDays, saHolidays, isBusinessDay, lastBusinessDayOnOrBefore, daysBetween, assessmentInterest, assessmentRecon, r2, n, sum, clone, deepMerge, getPack, tableTax, marginalRate, ageAtYearEnd, rebatesFor, thresholdFor, normalTax, emptyYear, emptyClient, aggregateIrp5, travelBand, travelClaim, cgtCalc, lumpSumTax, medicalCredits, compute, basicAmount, provisionalCalc, dueDates, fmt };
+const api = { companyCarCalc, companyCarsCalc, travelClaims, homeOfficeCalc, assetWearTear, IN47_ASSETS, migrateYear, emptyVehicle, emptyCompanyCar, emptyHomeOffice, companyCarCalc, taxByBracket, addBusinessDays, saHolidays, isBusinessDay, lastBusinessDayOnOrBefore, daysBetween, assessmentInterest, assessmentRecon, r2, n, sum, clone, deepMerge, getPack, tableTax, marginalRate, ageAtYearEnd, rebatesFor, thresholdFor, normalTax, emptyYear, emptyClient, aggregateIrp5, travelBand, travelClaim, cgtCalc, lumpSumTax, medicalCredits, compute, basicAmount, provisionalCalc, dueDates, fmt };
 if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.IntaxEngine = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -31,7 +31,7 @@ WIZ.checklist = {
     { title: 'Which deductions and credits apply?', intro: 'Deduction finder: tick everything the taxpayer paid or received.', html: () => tilesHtml(['retirement', 'medical', 'travel', 'donations', 'homeOffice', 'provisional']) + `<div class="alert tip" style="margin-top:14px">💡 Commonly missed: retirement annuity certificates (IT3(f)), out-of-pocket medical costs, the travel logbook, s18A donation receipts and home office costs for commission earners.</div>` },
     { title: 'Ready', intro: 'The following wizards will run next. You can skip any of them.', html: () => { const q = WIZ.checklist.queue(); return q.length ? `<ol>${q.map(k => `<li>${WIZ[k].title}</li>`).join('')}</ol>` : '<p>No sections selected.</p>'; } }
   ],
-  queue() { const y = yd(); const map = { employment: 'irp5', companyCar: 'companycar', business: 'business', rental: 'rental', investments: 'investments', cgt: 'cgt', lumpSums: 'lumps', retirement: 'retirement', medical: 'medical', travel: 'travel', donations: 'donations', provisional: 'p1' }; return Object.keys(map).filter(k => y.flags[k]).map(k => map[k]); },
+  queue() { const y = yd(); const map = { employment: 'irp5', homeOffice: 'homeoffice', companyCar: 'companycar', business: 'business', rental: 'rental', investments: 'investments', cgt: 'cgt', lumpSums: 'lumps', retirement: 'retirement', medical: 'medical', travel: 'travel', donations: 'donations', provisional: 'p1' }; return Object.keys(map).filter(k => y.flags[k]).map(k => map[k]); },
   finish() { Wizard.queue = WIZ.checklist.queue(); return 'dashboard'; }
 };
 function tilesHtml(keys) {
@@ -133,24 +133,37 @@ WIZ.medical = {
 };
 
 WIZ.travel = {
-  title: 'Travel allowance & logbook', desc: 'Deemed or actual cost claim from a logbook.',
+  title: 'Travel – add a vehicle', desc: 'Logbook claim for a vehicle (run again for each extra vehicle).',
+  start() { S.scratch.veh = E.emptyVehicle(((yd().travel || {}).vehicles || []).length + 1); },
   steps: [
-    { title: 'Vehicle', html: () => { const y = yd(); y.travel.enabled = true; return `<div class="grid g2">${f({ p: 'y.travel.vehicleValue', label: 'Vehicle value incl. VAT when acquired', type: 'money' })}${f({ p: 'y.travel.daysUsed', label: 'Days used for business this year', type: 'int', placeholder: '365' })}${f({ p: 'y.travel.fuelBorne', label: 'Paid all fuel personally', type: 'check' })}${f({ p: 'y.travel.maintBorne', label: 'Paid all maintenance (no maintenance plan)', type: 'check' })}</div>`; } },
-    { title: 'Logbook', intro: 'Odometer on 1 March and end of February give total km; the logbook gives business km.', html: () => `<div class="grid g2">${f({ p: 'y.travel.totalKm', label: 'Total kilometres', type: 'int' })}${f({ p: 'y.travel.businessKm', label: 'Business kilometres', type: 'int' })}</div>` },
-    { title: 'Actual costs (optional)', intro: 'Enter actual costs if you kept receipts – the better method is chosen automatically.', html: () => `<div class="grid g3">${['fuel', 'maintenance', 'insurance', 'licence', 'interest', 'lease'].map(k => f({ p: `y.travel.actual.${k}`, label: k[0].toUpperCase() + k.slice(1), type: 'money' })).join('')}</div>` },
-    { title: 'Result', html: () => { const r = result(), t = r.travel; return sumLine('Travel allowance received', money(r.irp5.agg.travel)) + sumLine('Deemed cost', money(t.deemed)) + sumLine('Actual cost', money(t.actual)) + sumLine('Deduction (' + t.method + ')', money(t.chosen), 'total') + (t.notes || []).map(n => `<div class="alert info">${esc(n)}</div>`).join(''); } }
+    { title: 'Vehicle', intro: 'If more than one vehicle was used for business this year (e.g. the car was replaced), run this wizard once per vehicle.', html: () => `<div class="grid g2">${f({ p: 't.veh.name', label: 'Vehicle (make & model)' })}${f({ p: 't.veh.registration', label: 'Registration' })}${f({ p: 't.veh.vehicleValue', label: 'Value incl. VAT when acquired', type: 'money' })}${f({ p: 't.veh.daysUsed', label: 'Days used in this tax year', type: 'int', placeholder: '365' })}${f({ p: 't.veh.fuelBorne', label: 'Paid all fuel personally', type: 'check' })}${f({ p: 't.veh.maintBorne', label: 'Paid all maintenance (no maintenance plan)', type: 'check' })}</div>` },
+    { title: 'Logbook', intro: 'Odometer readings at the start and end of the period give total km; the logbook gives business km.', html: () => `<div class="grid g2">${f({ p: 't.veh.totalKm', label: 'Total kilometres', type: 'int' })}${f({ p: 't.veh.businessKm', label: 'Business kilometres', type: 'int' })}</div>` },
+    { title: 'Actual costs (optional)', intro: 'Enter actual costs if you kept receipts – the better method is chosen automatically.', html: () => `<div class="grid g3">${['fuel', 'maintenance', 'insurance', 'licence', 'interest', 'lease'].map(k => f({ p: `t.veh.actual.${k}`, label: k[0].toUpperCase() + k.slice(1), type: 'money' })).join('')}</div>` },
+    { title: 'Result', html: () => { const v = E.travelClaim(Object.assign({}, S.scratch.veh, { enabled: true }), pack(), Infinity); const r = result(); return sumLine('This vehicle – deemed cost', money(v.deemed)) + sumLine('This vehicle – actual cost', money(v.actual)) + sumLine('Claim for this vehicle (' + v.method + ')', money(v.uncapped), 'total') + sumLine('Other vehicles already captured', money(r.travel.uncapped)) + sumLine('Travel allowance received', money(r.irp5.agg.travel)) + '<p class="muted">The total for all vehicles is limited to the allowance.</p>'; } }
   ],
-  finish() { yd().flags.travel = true; return 'travel'; }
+  finish() { const y = yd(); y.travel.enabled = true; y.travel.vehicles.push(E.clone(S.scratch.veh)); y.flags.travel = true; return 'travel'; }
 };
 
 WIZ.companycar = {
-  title: 'Company car benefit', desc: 'Reduce the 3802 fringe benefit with a logbook.',
+  title: 'Company car – add a vehicle', desc: 'Reduce the 3802 fringe benefit with a logbook (one per car).',
+  start() { S.scratch.car = E.emptyCompanyCar(((yd().companyCars) || []).length + 1); },
   steps: [
-    { title: 'The vehicle', intro: 'The determined value is the employer\u2019s cost of the car including VAT, excluding finance charges.', html: () => { yd().companyCar.enabled = true; return `<div class="grid g2">${f({ p: 'y.companyCar.determinedValue', label: 'Determined value', type: 'money' })}${f({ p: 'y.companyCar.months', label: 'Months available', type: 'int' })}${f({ p: 'y.companyCar.maintenancePlan', label: 'Sold with a maintenance plan', type: 'check' })}</div>`; } },
-    { title: 'Logbook', html: () => `<div class="grid g2">${f({ p: 'y.companyCar.totalKm', label: 'Total kilometres', type: 'int' })}${f({ p: 'y.companyCar.businessKm', label: 'Business kilometres', type: 'int' })}${f({ p: 'y.companyCar.fuelBorne', label: 'I paid all private fuel', type: 'check' })}${f({ p: 'y.companyCar.maintBorne', label: 'I paid all private maintenance', type: 'check' })}${f({ p: 'y.companyCar.insurance', label: 'Insurance paid personally', type: 'money' })}${f({ p: 'y.companyCar.licence', label: 'Licence paid personally', type: 'money' })}</div>` },
-    { title: 'Result', html: () => { const c = result().companyCar; return sumLine('Fringe benefit value', money(c.value)) + sumLine('Reduction on assessment', money(-c.reduction)) + sumLine('Taxable benefit', money(c.value - c.reduction), 'total'); } }
+    { title: 'The vehicle', intro: 'The determined value is the employer’s cost of the car including VAT, excluding finance charges. Run the wizard once for each company car used during the year.', html: () => `<div class="grid g2">${f({ p: 't.car.name', label: 'Vehicle (make & model)' })}${f({ p: 't.car.registration', label: 'Registration' })}${f({ p: 't.car.determinedValue', label: 'Determined value', type: 'money' })}${f({ p: 't.car.months', label: 'Months available', type: 'int' })}${f({ p: 't.car.maintenancePlan', label: 'Sold with a maintenance plan', type: 'check' })}</div>` },
+    { title: 'Logbook', html: () => `<div class="grid g2">${f({ p: 't.car.totalKm', label: 'Total kilometres', type: 'int' })}${f({ p: 't.car.businessKm', label: 'Business kilometres', type: 'int' })}${f({ p: 't.car.fuelBorne', label: 'I paid all private fuel', type: 'check' })}${f({ p: 't.car.maintBorne', label: 'I paid all private maintenance', type: 'check' })}${f({ p: 't.car.insurance', label: 'Insurance paid personally', type: 'money' })}${f({ p: 't.car.licence', label: 'Licence paid personally', type: 'money' })}</div>` },
+    { title: 'Result', html: () => { const c = E.companyCarCalc(Object.assign({}, S.scratch.car, { enabled: true }), pack(), 0); return sumLine('Calculated fringe benefit', money(c.calculated)) + sumLine('Reduction on assessment', money(-c.reduction)) + sumLine('Taxable benefit', money(c.value - c.reduction), 'total') + '<p class="muted">If the IRP5 shows the benefit (3802), it is split between your cars automatically.</p>'; } }
   ],
-  finish() { yd().flags.companyCar = true; return 'companycar'; }
+  finish() { const y = yd(); y.companyCars.push(E.clone(S.scratch.car)); y.flags.companyCar = true; return 'companycar'; }
+};
+
+WIZ.homeoffice = {
+  title: 'Working from home', desc: 'Check the home office rules and work out the deduction.',
+  steps: [
+    { title: 'How does the taxpayer earn income?', html: () => { const h = yd().homeOffice; h.enabled = true; return `${f({ p: 'y.homeOffice.basis', label: 'Earns income as', type: 'select', options: [['employee', 'Salaried employee'], ['commission', 'Employee – mainly commission'], ['business', 'Own business / independent contractor']] })}<br>${f({ p: 'y.homeOffice.months', label: 'Months worked from home this year', type: 'int' })}`; } },
+    { title: 'The requirements', intro: 'SARS only allows home running costs when all of these are true.', html: () => { const h = yd().homeOffice; return `${f({ p: 'y.homeOffice.exclusive', label: 'The room is used regularly and exclusively for work', type: 'check' })}${f({ p: 'y.homeOffice.equipped', label: 'The room is specifically equipped for work', type: 'check' })}${h.basis !== 'business' ? f({ p: 'y.homeOffice.mainlyAtHome', label: h.basis === 'commission' ? 'Duties are mainly performed outside an office provided by the employer' : 'More than 50% of duties are performed in the home office', type: 'check' }) : ''}`; } },
+    { title: 'Floor area and home costs', intro: 'Enter the costs of the whole home for the year – the office share is applied automatically.', html: () => `<div class="grid g2">${f({ p: 'y.homeOffice.officeArea', label: 'Office area (m²)', type: 'dec' })}${f({ p: 'y.homeOffice.homeArea', label: 'Total home area (m²)', type: 'dec' })}</div><div class="grid g3" style="margin-top:10px">${HO_COSTS.map(([k, l]) => f({ p: `y.homeOffice.costs.${k}`, label: l, type: 'money' })).join('')}</div>` },
+    { title: 'Result', html: () => { const h = result().homeOffice; return (h.eligible ? '<div class="alert tip">✓ Qualifies for a home office deduction.</div>' : h.reasons.map(x => `<div class="alert warn">${esc(x)}</div>`).join('')) + sumLine('Office share', (Math.round(h.pct * 1000) / 10) + '%') + sumLine('Home office portion of running costs', money(h.premises)) + sumLine('Total so far', money(h.total), 'total') + '<p class="muted">Add work equipment (laptop, desk, chair…) for wear-and-tear on the Work from home screen.</p>'; } }
+  ],
+  finish() { yd().flags.homeOffice = true; return 'homeoffice'; }
 };
 
 WIZ.donations = {
@@ -220,7 +233,7 @@ const Wizard = {
     render();
   },
   menu() {
-    const list = ['newclient', 'checklist', 'irp5', 'companycar', 'business', 'rental', 'investments', 'cgt', 'lumps', 'retirement', 'medical', 'travel', 'donations', 'p1', 'p2', 'final'];
+    const list = ['newclient', 'checklist', 'irp5', 'companycar', 'business', 'rental', 'investments', 'cgt', 'lumps', 'retirement', 'medical', 'travel', 'homeoffice', 'donations', 'p1', 'p2', 'final'];
     const m = modal({ title: '✦ Wizards', body: `<p class="wiz-intro">Guided, step-by-step capture. Each wizard explains what to enter and shows the tax effect before you finish.</p><div class="wiz-list">${list.map(k => `<div class="wiz-card" data-wiz="${k}"><b>${WIZ[k].title}</b><span>${WIZ[k].desc || ''}</span></div>`).join('')}</div>` });
     m.body.addEventListener('click', e => { const c = e.target.closest('[data-wiz]'); if (c) { m.el.remove(); Wizard.queue = []; Wizard.open(c.dataset.wiz); } });
   }

@@ -11,7 +11,7 @@ const S = {
 const DEFAULT_SETTINGS = {
   practice: { name: '', practitioner: '', prNumber: '', regBody: '', address: '', phone: '', email: '', website: '', logo: '', disclaimer: 'This computation is an estimate prepared for tax planning purposes from information supplied by the taxpayer. Final liability is determined by SARS on assessment.' },
   lastClient: null, lastYear: 2027, interestRate: 10.5, codes: null, reportAccent: '#0b7a75',
-  billing: { vatRegistered: false, vatNumber: '', vatRate: 15, invoicePrefix: 'INV', nextInvoice: 1, defaultRate: 950, paymentTerms: 30, bankName: '', accountName: '', accountNumber: '', branchCode: '', engagementFee: '' },
+  billing: { defaultRate: 950, paymentTerms: 30, engagementFee: '' },
   security: { pinHash: '', lockMinutes: 0 },
   defaultHome: 'practice'
 };
@@ -27,7 +27,10 @@ function yd(create = true) {
     if (prev) { // roll forward stable settings and carry-forwards
       y.flags = E.clone(prev.flags);
       y.medical = Object.assign(E.clone(prev.medical), { qme: 0 });
-      y.travel = Object.assign(E.clone(prev.travel), { totalKm: 0, businessKm: 0 });
+      E.migrateYear(prev);
+      y.travel = { enabled: prev.travel.enabled, vehicles: prev.travel.vehicles.map(v => Object.assign(E.clone(v), { totalKm: 0, businessKm: 0, daysUsed: 365 })) };
+      y.companyCars = prev.companyCars.map(c => Object.assign(E.clone(c), { totalKm: 0, businessKm: 0, months: 12, irp5Value: null }));
+      y.homeOffice = Object.assign(E.clone(prev.homeOffice), { otherCosts: [] });
       try {
         const r = E.compute(c, prev, pack(S.year - 1), codeList());
         y.deductions.raCarryForward = r.ra.carryForward; y.deductions.donationsCarryForward = r.donations.carryForward;

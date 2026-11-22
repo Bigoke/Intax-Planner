@@ -6,7 +6,7 @@ const { letterhead, titleBlock, footer, doc, tr, sect, m2 } = H;
 const today = () => new Date().toISOString().slice(0, 10);
 const wrap = (title, body, opts = {}) => ({ title, html: doc(title, letterhead() + body + (opts.sign ? `<div class="sign"><div>${opts.sign[0]}</div><div>${opts.sign[1]}</div></div>` : '') + (opts.letter ? '' : footer())), fileName: opts.fileName });
 const need = () => { if (!cur()) throw new Error('Select a client first.'); return { c: cur(), y: yd(), r: result(), P: pack() }; };
-const P_ = () => S.settings.practice, B_ = () => S.settings.billing;
+const P_ = () => S.settings.practice, B_ = () => S.settings.billing || {};
 const safe = (c, yr) => { try { return c.years[yr] ? E.compute(c, c.years[yr], pack(yr), codeList(), { interestRate: S.settings.interestRate }) : null; } catch (e) { return null; } };
 const addr = (c) => c.address ? esc(c.address).replace(/\n/g, '<br>') : '';
 
@@ -14,16 +14,16 @@ const NEW = [
   { id: 'comparative', cat: 'Client reports', title: 'Comparative computation', desc: 'This year against last year, line by line, with differences.' },
   { id: 'brackets', cat: 'Client reports', title: 'Tax rate analysis', desc: 'Tax per bracket, marginal and effective rates, room before the next bracket.' },
   { id: 'savings', cat: 'Planning', title: 'Retirement & savings planning', desc: 'Unused RA, TFSA, donation and interest-exemption room with tax saved.' },
-  { id: 'companycar', cat: 'Client reports', title: 'Company car benefit schedule', desc: 'Fringe benefit value and logbook reduction (para 7).' },
+  { id: 'companycar', cat: 'Client reports', title: 'Company car benefit schedule', desc: 'Fringe benefit value and logbook reduction per vehicle (para 7).' },
+  { id: 'homeoffice', cat: 'Client reports', title: 'Home office schedule', desc: 'Requirements, office share of home costs and wear-and-tear on equipment.' },
   { id: 'irp6capture', cat: 'Provisional tax', title: 'IRP6 capture sheet', desc: 'Field-by-field figures for both IRP6 returns on eFiling.' },
   { id: 'assessment', cat: 'Client reports', title: 'Assessment reconciliation (ITA34)', desc: 'Plan vs SARS assessment, differences and objection deadline.' },
   { id: 'docrequest', cat: 'Engagement', title: 'Document request letter', desc: 'Letter to the client listing outstanding documents.' },
   { id: 'engagement', cat: 'Engagement', title: 'Engagement letter', desc: 'Scope, responsibilities and fees for tax planning and returns.' },
-  { id: 'invoice', cat: 'Engagement', title: 'Invoice', desc: 'Open from Time & fees to view a specific invoice.', hidden: true },
   { id: 'auditlog', cat: 'Engagement', title: 'Change log (audit trail)', desc: 'All changes to this client with dates and values.' },
   { id: 'deadlines', cat: 'Practice', title: 'Deadlines & payments', desc: 'Overdue and upcoming payments and deadlines for all clients.' },
-  { id: 'wip', cat: 'Practice', title: 'Work in progress', desc: 'Status, documents, balances and unbilled fees per client.' },
-  { id: 'feeregister', cat: 'Practice', title: 'Fee register', desc: 'Invoices issued, paid and unpaid, plus unbilled work.' },
+  { id: 'wip', cat: 'Practice', title: 'Work in progress', desc: 'Status, documents, balances and time recorded per client.' },
+  { id: 'timesummary', cat: 'Practice', title: 'Time records', desc: 'Hours and value recorded per client for the year.' },
   { id: 'provsummary', cat: 'Practice', title: 'Provisional tax summary – all clients', desc: '1st, 2nd and top-up amounts for every provisional taxpayer.' }
 ];
 REPORTS.LIST.push(...NEW);
@@ -78,10 +78,25 @@ REPORTS.packExtra = (c, r, P, y) => [bracketsBody(c, r, P), savingsBody(c, r, P,
 
 // ---------- Company car ----------
 X.companycar = () => {
-  const { c, r, P, y } = need(), cc = r.companyCar, I = y.companyCar;
-  if (!cc.enabled) throw new Error('Turn on the company car calculation first (Company car benefit screen).');
-  return wrap('Company car benefit schedule', titleBlock('Company Car Fringe Benefit', 'Seventh Schedule, paragraph 7', c, P) +
-    `<table>${tr('Determined value', I.determinedValue)}${tr(`Monthly rate (${(cc.rate * 100).toFixed(2)}%) × ${cc.months} months`, cc.calculated)}${tr(cc.fromIrp5 ? 'Value per IRP5 (3802/3816)' : 'Value included in income', cc.value, 'sub')}${sect('Reduction on assessment (logbook)')}${tr(`Business use: ${E.fmt(I.businessKm)} of ${E.fmt(I.totalKm)} km`, -cc.businessPart)}${tr('Private fuel borne by employee', -cc.fuelPart)}${tr('Private maintenance borne by employee', -cc.maintPart)}${tr('Insurance and licence borne by employee', -cc.otherPart)}${tr('Total reduction', -cc.reduction, 'sub')}${tr('Taxable fringe benefit', cc.value - cc.reduction, 'tot')}</table>`);
+  const { c, r, P } = need(), cc = r.companyCar;
+  if (!cc.cars.length) throw new Error('Add the company car(s) on the Company car benefit screen first.');
+  return wrap('Company car benefit schedule', titleBlock('Company Car Fringe Benefit', `Seventh Schedule, paragraph 7 · ${cc.cars.length} vehicle(s)`, c, P) +
+    cc.cars.map(x => { const I = x.input; return `<h2>${esc(x.name)}${x.registration ? ' – ' + esc(x.registration) : ''}</h2><table>${tr('Determined value', I.determinedValue)}${tr(`Monthly rate (${(x.rate * 100).toFixed(2)}%) × ${x.months} months`, x.calculated)}${tr(cc.fromIrp5 ? 'Value per IRP5 (3802/3816)' : 'Value included in income', x.value, 'sub')}${sect('Reduction on assessment (logbook)')}${tr(`Business use: ${E.fmt(I.businessKm)} of ${E.fmt(I.totalKm)} km`, -x.businessPart)}${tr('Private fuel borne by employee', -x.fuelPart)}${tr('Private maintenance borne by employee', -x.maintPart)}${tr('Insurance and licence borne by employee', -x.otherPart)}${tr('Taxable fringe benefit', x.value - x.reduction, 'tot')}</table>`; }).join('') +
+    (cc.cars.length > 1 ? `<h2>All vehicles</h2><table>${tr('Total value', cc.value)}${tr('Total reduction', -cc.reduction)}${tr('Total taxable fringe benefit', cc.value - cc.reduction, 'tot')}</table>` : ''));
+};
+X.homeoffice = () => {
+  const { c, r, P, y } = need(), ho = r.homeOffice, I = y.homeOffice;
+  if (!ho.enabled) throw new Error('Capture the home office on the Work from home screen first.');
+  const basis = { employee: 'Salaried employee', commission: 'Employee mainly earning commission', business: 'Own business / independent contractor' }[I.basis] || I.basis;
+  const ck = (b) => b ? '☑' : '☐';
+  return wrap('Home office schedule', titleBlock('Home Office (Working from Home)', 'Sections 11(a), 11(e) and 23(b)', c, P) +
+    `<h2>Requirements</h2><table><tr><td>Basis</td><td class="r">${basis}</td></tr><tr><td>${ck(I.exclusive)} Room used regularly and exclusively for work</td><td></td></tr><tr><td>${ck(I.equipped)} Room specifically equipped for work</td><td></td></tr>${I.basis !== 'business' ? `<tr><td>${ck(I.mainlyAtHome)} ${I.basis === 'commission' ? 'Duties mainly performed outside an employer\u2019s office' : 'More than 50% of duties performed in the home office'}</td><td></td></tr>` : ''}</table>
+    <div class="box ${ho.eligible ? '' : 'warn'}">${ho.eligible ? 'The requirements for a home office deduction are met.' : 'The requirements are not met: ' + ho.reasons.map(esc).join(' ')}</div>
+    <h2>Home running costs</h2><table>${Object.entries(I.costs).filter(([, v]) => E.n(v)).map(([k, v]) => tr({ rent: 'Rent', bondInterest: 'Bond interest', rates: 'Rates & taxes / levies', electricity: 'Electricity', water: 'Water', cleaning: 'Cleaning', repairs: 'Repairs', insurance: 'Building insurance', security: 'Security', other: 'Other home costs' }[k] || k, v)).join('')}${tr('Total', ho.homeCosts, 'sub')}${tr(`Office share ${E.fmt(I.officeArea, 1)} m² of ${E.fmt(I.homeArea, 1)} m² = ${Math.round(ho.pct * 1000) / 10}%${ho.months < 12 ? ', ' + ho.months + ' months' : ''}`, ho.premises, 'sub')}</table>
+    ${ho.assets.length ? `<h2>Wear-and-tear on work equipment (s11(e))</h2><table><tr><th>Item</th><th class="r">Cost</th><th class="r">Bought</th><th class="r">Period</th><th class="r">Work %</th><th class="r">Claim</th></tr>${ho.assets.map((a, i) => `<tr><td>${esc(a.desc)}<br><span class="muted">${esc(a.note)}</span></td><td class="r">${m2(a.cost)}</td><td class="r">${esc((I.assets[i] || {}).purchaseDate || '')}</td><td class="r">${a.years} yrs</td><td class="r">${a.businessPct}%</td><td class="r">${m2(a.claim)}</td></tr>`).join('')}</table>` : ''}
+    ${(I.otherCosts || []).length ? `<h2>Other work costs${ho.otherAllowed ? '' : ' (not deductible for salaried employees – s23(m))'}</h2><table>${I.otherCosts.map(o => tr(esc(o.desc), o.amount)).join('')}</table>` : ''}
+    <table style="margin-top:10px">${tr('Home office portion', ho.premises)}${tr('Wear-and-tear', ho.wearTear)}${tr('Other work costs allowed', ho.other)}${tr('Total home office deduction', ho.total, 'tot')}</table>
+    <div class="box">The office portion of the home may not qualify for the primary residence exclusion when the home is sold.</div>`);
 };
 
 // ---------- IRP6 capture sheet ----------
@@ -126,23 +141,9 @@ X.engagement = () => {
   <p>Unless agreed separately in writing, the engagement excludes SARS audits and verifications beyond routine supporting documents, dispute resolution after objection, estate planning and bookkeeping.</p>
   <h2>2. Your responsibilities</h2><ul><li>Provide complete and accurate information and supporting documents in time to meet SARS deadlines.</li><li>Tell us promptly about changes in your income or circumstances during the year.</li><li>Keep records that support your returns for at least five years from the date the return is submitted, as required by the Tax Administration Act.</li><li>Review the returns we prepare before submission. You remain responsible for the accuracy of your tax affairs.</li></ul>
   <h2>3. Our responsibilities</h2><ul><li>Perform the services with due care, as a registered tax practitioner${p.prNumber ? ' (' + esc(p.prNumber) + (p.regBody ? ', ' + esc(p.regBody) : '') + ')' : ''}.</li><li>Keep your information confidential and process personal information in line with the Protection of Personal Information Act (POPIA).</li><li>We do not audit or independently verify the information you give us.</li></ul>
-  <h2>4. Fees</h2><p>${esc(B.engagementFee || 'Our fees are based on the time spent at our standard hourly rates.')} Invoices are payable within ${E.n(B.paymentTerms) || 30} days.${B.vatRegistered ? ' VAT is charged at the standard rate.' : ''}</p>
+  <h2>4. Fees</h2><p>${esc(B.engagementFee || 'Our fees are based on the time spent at our standard hourly rates.')} Invoices are payable within ${E.n(B.paymentTerms) || 30} days.</p>
   <h2>5. Limitations</h2><p>Provisional tax amounts are estimates based on information available at the time. SARS determines the final liability on assessment. We are not responsible for penalties or interest caused by late or incomplete information.</p>
   <p>Please sign and return a copy of this letter to confirm your acceptance.</p><p>Yours sincerely,<br><br><b>${esc(p.practitioner || '')}</b><br>${esc(p.name || '')}</p>`, { letter: true, sign: [`For ${esc(p.name || 'the practice')}`, `Accepted: ${esc(clientName(c))} – date`], fileName: `Engagement letter - ${clientName(c)} - ${S.year}.pdf` });
-};
-
-// ---------- Invoice ----------
-X.invoice = (no) => {
-  const c = cur(); if (!c) throw new Error('Select a client first.');
-  const inv = (c.invoices || []).find(i => i.no === no) || (c.invoices || []).slice(-1)[0];
-  if (!inv) throw new Error('No invoice found – create one on the Time & fees screen.');
-  const p = P_(), B = B_();
-  const html = `<div class="tb"><div><h1>${inv.vatRate ? 'Tax invoice' : 'Invoice'} ${esc(inv.no)}</h1><div class="st">${inv.paid ? 'PAID' : 'Due ' + dateLong(inv.dueDate)}</div></div><div style="text-align:right;font-size:9pt">Date: <b>${dateLong(inv.date)}</b>${inv.vatRate && B.vatNumber ? `<br>VAT no: <b>${esc(B.vatNumber)}</b>` : ''}</div></div>
-  <div class="two"><div class="box"><b>Bill to</b><br>${esc(clientName(c))}${c.address ? '<br>' + addr(c) : ''}${c.taxRef ? '<br>Tax ref: ' + esc(c.taxRef) : ''}${c.vatNumber ? '<br>VAT no: ' + esc(c.vatNumber) : ''}</div><div class="box"><b>Payment details</b><br>${B.bankName ? `${esc(B.bankName)}<br>Account: ${esc(B.accountName)}<br>Number: ${esc(B.accountNumber)}${B.branchCode ? '<br>Branch: ' + esc(B.branchCode) : ''}` : '<span class="muted">Add bank details in Practice settings.</span>'}<br>Reference: <b>${esc(inv.no)}</b></div></div>
-  <table style="margin-top:10px"><tr><th style="width:90px">Date</th><th>Description</th><th class="r">Hours</th><th class="r">Rate</th><th class="r">Amount (R)</th></tr>${inv.items.map(i => `<tr><td>${esc(i.date || '')}</td><td>${esc(i.desc)}</td><td class="r">${i.hours || ''}</td><td class="r">${i.rate && i.hours ? m2(i.rate) : ''}</td><td class="r">${m2(i.amount)}</td></tr>`).join('')}
-  ${inv.vatRate ? tr('Subtotal (excl. VAT)', inv.subtotal, 'sub').replace('<td>', '<td colspan="4">') + tr(`VAT at ${inv.vatRate}%`, inv.vat).replace('<td>', '<td colspan="4">') : ''}${tr('Total due', inv.total, 'tot').replace('<td>', '<td colspan="4">')}</table>
-  <p class="muted" style="margin-top:12px">Payment terms: ${E.n(B.paymentTerms) || 30} days. Thank you for your business.</p>`;
-  return { title: 'Invoice ' + inv.no, html: doc('Invoice ' + inv.no, letterhead() + html), fileName: `Invoice ${inv.no} - ${clientName(c)}.pdf`.replace(/[\\/:*?"<>|]/g, '') };
 };
 
 // ---------- Change log ----------
@@ -163,17 +164,14 @@ X.deadlines = () => {
 X.wip = () => {
   const rows = S.clients.slice().sort((a, b) => clientName(a).localeCompare(clientName(b))).map(c => {
     const y = c.years[S.year], r = safe(c, S.year), docs = y ? window.docList(c, y) : [];
-    return `<tr><td>${esc(clientName(c))}</td><td>${esc((y && y.status) || 'Not started')}${y && y.locked ? ' 🔒' : ''}</td><td class="r">${docs.filter(d => d.received).length}/${docs.length}</td><td class="r">${r ? m2(r.taxableIncome) : ''}</td><td class="r">${r ? m2(r.balance) : ''}</td><td class="r">${m2((c.fees || []).filter(f => !f.invoiceNo).reduce((a, f) => a + E.n(f.amount), 0))}</td></tr>`;
+    return `<tr><td>${esc(clientName(c))}</td><td>${esc((y && y.status) || 'Not started')}${y && y.locked ? ' 🔒' : ''}</td><td class="r">${docs.filter(d => d.received).length}/${docs.length}</td><td class="r">${r ? m2(r.taxableIncome) : ''}</td><td class="r">${r ? m2(r.balance) : ''}</td><td class="r">${m2((c.fees || []).filter(f => Number(f.year) === S.year).reduce((a, f) => a + E.n(f.amount), 0))}</td></tr>`;
   }).join('');
-  return wrap('Work in progress', titleBlock('Work in Progress', `Tax year ${pack().label}`, null, null) + `<table><tr><th>Client</th><th>Status</th><th class="r">Docs</th><th class="r">Taxable income</th><th class="r">Balance</th><th class="r">Unbilled</th></tr>${rows}</table>`, { fileName: `Work in progress ${S.year}.pdf` });
+  return wrap('Work in progress', titleBlock('Work in Progress', `Tax year ${pack().label}`, null, null) + `<table><tr><th>Client</th><th>Status</th><th class="r">Docs</th><th class="r">Taxable income</th><th class="r">Balance</th><th class="r">Time value</th></tr>${rows}</table>`, { fileName: `Work in progress ${S.year}.pdf` });
 };
-X.feeregister = () => {
-  const inv = S.clients.flatMap(c => (c.invoices || []).map(i => ({ c, i }))).sort((a, b) => a.i.date.localeCompare(b.i.date));
-  const unb = S.clients.map(c => ({ c, amt: (c.fees || []).filter(f => !f.invoiceNo).reduce((a, f) => a + E.n(f.amount), 0) })).filter(x => x.amt);
-  const t = (l) => l.reduce((a, x) => a + x.i.total, 0);
-  return wrap('Fee register', titleBlock('Fee Register', `As at ${dateLong(today())}`, null, null) + `<h2>Invoices</h2><table><tr><th>Invoice</th><th>Date</th><th>Client</th><th class="r">Excl. VAT</th><th class="r">VAT</th><th class="r">Total</th><th>Status</th></tr>${inv.map(x => `<tr><td>${esc(x.i.no)}</td><td>${dateLong(x.i.date)}</td><td>${esc(clientName(x.c))}</td><td class="r">${m2(x.i.subtotal)}</td><td class="r">${m2(x.i.vat)}</td><td class="r">${m2(x.i.total)}</td><td>${x.i.paid ? 'Paid' : 'Unpaid'}</td></tr>`).join('')}${tr('Total invoiced', t(inv), 'sub').replace('<td>', '<td colspan="5">').replace('</tr>', '<td></td></tr>')}</table>
-  <table style="margin-top:8px">${tr('Paid', t(inv.filter(x => x.i.paid)))}${tr('Outstanding', t(inv.filter(x => !x.i.paid)), 'tot')}</table>
-  <h2>Unbilled work</h2><table>${unb.map(x => tr(esc(clientName(x.c)), x.amt)).join('') || '<tr><td>None</td></tr>'}</table>`, { fileName: `Fee register ${today()}.pdf` });
+X.timesummary = () => {
+  const rows = S.clients.map(c => { const fs = c.fees || [], yy = fs.filter(f => Number(f.year) === S.year); return { c, fs: yy, h: yy.reduce((a, f) => a + E.n(f.hours), 0), v: yy.reduce((a, f) => a + E.n(f.amount), 0) }; }).filter(x => x.fs.length).sort((a, b) => clientName(a.c).localeCompare(clientName(b.c)));
+  return wrap('Time summary', titleBlock('Time Records', `Tax year ${pack().label}`, null, null) + rows.map(x => `<h2>${esc(clientName(x.c))}</h2><table><tr><th style="width:90px">Date</th><th>Work done</th><th class="r">Hours</th><th class="r">Value</th></tr>${x.fs.map(f => `<tr><td>${esc(f.date || '')}</td><td>${esc(f.desc)}</td><td class="r">${E.fmt(E.n(f.hours), 1)}</td><td class="r">${m2(f.amount)}</td></tr>`).join('')}<tr class="sub"><td colspan="2">Total</td><td class="r">${E.fmt(x.h, 1)}</td><td class="r">${m2(x.v)}</td></tr></table>`).join('') +
+    `<table style="margin-top:12px"><tr class="tot"><td>All clients</td><td class="r">${E.fmt(rows.reduce((a, x) => a + x.h, 0), 1)} h</td><td class="r">${m2(rows.reduce((a, x) => a + x.v, 0))}</td></tr></table>`, { fileName: `Time records ${S.year}.pdf` });
 };
 X.provsummary = () => {
   const rows = S.clients.filter(c => c.years[S.year] && c.years[S.year].flags.provisional).sort((a, b) => clientName(a).localeCompare(clientName(b))).map(c => { const r = safe(c, S.year), p = r.provisional; return { c, r, p }; });

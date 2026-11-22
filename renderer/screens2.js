@@ -1,4 +1,4 @@
-// Intax Planner 1.1 – practice features: practice dashboard, deadlines, documents, fees & invoices,
+// Intax Planner 1.1 – practice features: practice dashboard, deadlines, documents, time records,
 // change log, company car, SARS assessment, joint estate, TFSA, roll-forward, year lock and charts.
 'use strict';
 
@@ -9,13 +9,13 @@ NAV.push(
   { id: 'practice', label: 'Practice dashboard', icon: '◫' },
   { id: 'clients', label: 'Client register', icon: '☰' },
   { id: 'deadlines', label: 'Deadlines & payments', icon: '⏰' },
-  { id: 'billing', label: 'Fees & billing', icon: '₹' },
+  { id: 'timesummary', label: 'Time records', icon: '⌚' },
   { group: 'Client' },
   { id: 'dashboard', label: 'Client dashboard', icon: '▦' },
   { id: 'client', label: 'Taxpayer details', icon: '👤' },
   { id: 'checklist', label: 'Income & deduction checklist', icon: '☑' },
   { id: 'documents', label: 'Documents checklist', icon: '📄' },
-  { id: 'fees', label: 'Time & fees', icon: '⌚' },
+  { id: 'fees', label: 'Time records', icon: '⌚' },
   { id: 'auditlog', label: 'Change log', icon: '🕘' },
   { group: 'Income' },
   { id: 'employment', label: 'Employment (IRP5)', icon: '🏢', flag: 'employment' },
@@ -76,7 +76,6 @@ function allDeadlines() {
       if (r.recon && r.recon.entered && r.recon.objectionDeadline) out.push({ c, yr, kind: 'obj', label: 'Objection deadline (80 business days)', date: r.recon.objectionDeadline, amount: null, paid: 0, route: 'assessment', done: !!y.assessment.objectionLodged });
       if (y.assessment && y.assessment.paymentDue && E.n(y.assessment.balance) > 0) out.push({ c, yr, kind: 'asspay', label: 'Assessment payment due', date: y.assessment.paymentDue, amount: E.n(y.assessment.balance), paid: E.n(y.assessment.paid), route: 'assessment', done: E.n(y.assessment.paid) >= E.n(y.assessment.balance) - 1 });
     }
-    (c.invoices || []).forEach(inv => { if (!inv.paid) out.push({ c, yr: inv.year, kind: 'inv', label: `Invoice ${inv.no} due`, date: inv.dueDate, amount: inv.total, paid: 0, route: 'fees', done: false }); });
   }
   out.forEach(d => { d.days = daysUntil(d.date); d.overdue = !d.done && d.date < today; });
   return out.sort((a, b) => a.date.localeCompare(b.date));
@@ -92,9 +91,8 @@ SCREENS.practice = () => {
   const open = dl.filter(d => !d.done);
   const next30 = open.filter(d => !d.overdue && d.days <= 30), overdue = open.filter(d => d.overdue);
   const sumAmt = (l) => l.reduce((a, d) => a + (d.amount || 0) - (d.paid || 0), 0);
-  const fees = S.clients.flatMap(c => (c.fees || []).map(f => ({ c, f })));
-  const unbilled = fees.filter(x => !x.f.invoiceNo).reduce((a, x) => a + E.n(x.f.amount), 0);
-  const outstanding = S.clients.flatMap(c => c.invoices || []).filter(i => !i.paid).reduce((a, i) => a + i.total, 0);
+  const timeY = S.clients.flatMap(c => c.fees || []).filter(f => Number(f.year) === S.year);
+  const timeH = timeY.reduce((a, f) => a + E.n(f.hours), 0), timeV = timeY.reduce((a, f) => a + E.n(f.amount), 0);
   const statusCount = {}; STATUSES.forEach(s => statusCount[s] = 0);
   let prov = 0, refunds = 0, payable = 0;
   S.clients.forEach(c => { const y = c.years[S.year]; statusCount[(y && y.status) || 'Not started'] = (statusCount[(y && y.status) || 'Not started'] || 0) + 1; if (y && y.flags.provisional) prov++; const r = safeResult(c, S.year); if (r) { if (r.balance < 0) refunds += -r.balance; else payable += r.balance; } });
@@ -104,7 +102,7 @@ SCREENS.practice = () => {
     <div class="kpi accent"><div class="k-label">Clients</div><div class="k-val">${S.clients.length}</div><div class="k-sub">${prov} provisional taxpayers in ${S.year}</div></div>
     <div class="kpi gold"><div class="k-label">Due in next 30 days</div><div class="k-val">${money0(sumAmt(next30))}</div><div class="k-sub">${next30.length} payment(s) / deadline(s)</div></div>
     <div class="kpi ${overdue.length ? 'red' : 'green'}"><div class="k-label">Overdue</div><div class="k-val">${overdue.length}</div><div class="k-sub">${money0(sumAmt(overdue))} outstanding</div></div>
-    <div class="kpi"><div class="k-label">Fees</div><div class="k-val">${money0(unbilled)}</div><div class="k-sub">unbilled · ${money0(outstanding)} invoiced unpaid</div></div>
+    <div class="kpi"><div class="k-label">Time recorded – ${S.year}</div><div class="k-val">${E.fmt(timeH, 1)} h</div><div class="k-sub">value ${money0(timeV)}</div></div>
   </div>
   <div class="card"><div class="card-head"><h2>Work status – ${S.year}</h2><span class="muted">Payable on assessment ${money0(payable)} · refunds ${money0(refunds)}</span></div><div class="pipeline">${STATUSES.map(s => `<div class="pipe"><b>${statusCount[s] || 0}</b><span>${s}</span></div>`).join('')}</div></div>
   <div><div class="card"><div class="card-head"><h2>Next deadlines</h2><button class="btn btn-sm" data-route="deadlines">All deadlines →</button></div><table class="t">${dlHead}<tbody>${[...overdue, ...open.filter(d => !d.overdue)].slice(0, 10).map(dlRow).join('') || '<tr><td colspan="6" class="muted">No open deadlines.</td></tr>'}</tbody></table></div>
@@ -119,7 +117,7 @@ SCREENS.deadlines = () => {
   if (flt === '30') list = list.filter(d => !d.done && !d.overdue && d.days <= 30);
   if (flt === '90') list = list.filter(d => !d.done && !d.overdue && d.days <= 90);
   if (flt === 'open') list = list.filter(d => !d.done);
-  return head('Deadlines & payments', 'Provisional tax payments, top-ups, objection deadlines, assessment payments and unpaid invoices for every client.', `<button class="btn" data-act="csv" data-what="deadlines">Export CSV</button><button class="btn btn-primary" data-report="deadlines">Deadlines PDF</button>`) +
+  return head('Deadlines & payments', 'Provisional tax payments, top-ups, objection deadlines and assessment payments for every client.', `<button class="btn" data-act="csv" data-what="deadlines">Export CSV</button><button class="btn btn-primary" data-report="deadlines">Deadlines PDF</button>`) +
   `<div class="btn-row" style="margin-bottom:12px">${segBtns('dlf', [['open', 'All open'], ['overdue', 'Overdue'], ['30', 'Next 30 days'], ['90', 'Next 90 days'], ['all', 'Everything']], flt)}<span class="muted">${list.length} item(s)</span></div>
   <div class="card"><table class="t">${dlHead}<tbody>${list.map(dlRow).join('') || '<tr><td colspan="6" class="empty">Nothing here.</td></tr>'}</tbody></table></div>`;
 };
@@ -130,7 +128,7 @@ function docList(c, y) {
   const add = (key, label, why) => L.push({ key, label, why });
   (y.irp5 || []).forEach((cert, i) => add('irp5:' + i, `IRP5 / IT3(a) – ${cert.employer || 'employer ' + (i + 1)}`, 'Employment income and PAYE'));
   if (y.flags.employment && !(y.irp5 || []).length) add('irp5', 'IRP5 / IT3(a) from every employer', 'Employment income and PAYE');
-  if (y.flags.companyCar) add('car', 'Company car: determined value letter and logbook', 'Fringe benefit reduction');
+  if (y.flags.companyCar) add('car', `Company car${(y.companyCars || []).length > 1 ? 's' : ''}: determined value from employer and logbook`, 'Fringe benefit reduction');
   if (y.flags.business) add('business', 'Business records: income, expenses, bank statements / financial statements', 'Business income');
   if (y.flags.business) add('assets', 'Asset register / invoices for wear-and-tear', 'Business deductions');
   if (y.flags.rental) add('rental', 'Rental schedule, lease, bond statement (interest), rates and expense invoices', 'Rental income');
@@ -143,9 +141,11 @@ function docList(c, y) {
   if (y.flags.medical) add('medcert', 'Medical scheme tax certificate', 'Medical credits');
   if (y.flags.medical) add('medrec', 'Receipts for out-of-pocket medical expenses', 'Additional medical credit');
   if (y.medical && y.medical.disability) add('itrdd', 'ITR-DD confirmation of disability', 'Disability medical credit');
-  if (y.flags.travel) add('logbook', 'Travel logbook, vehicle purchase invoice, fuel and maintenance records', 'Travel deduction');
+  if (y.flags.travel) ((y.travel && y.travel.vehicles && y.travel.vehicles.length) ? y.travel.vehicles : [{ name: '' }]).forEach((v, i) => add('logbook' + (i ? ':' + i : ''), `Travel logbook${v.name ? ' – ' + v.name : ''}: odometer readings, purchase invoice, fuel and maintenance records`, 'Travel deduction'));
   if (y.flags.donations) add('s18a', 'Section 18A donation receipts', 'Donations deduction');
-  if (y.flags.homeOffice) add('homeoffice', 'Home office: floor plan and home running costs', 'Home office deduction');
+  if (y.flags.homeOffice) add('homeoffice', 'Home office: floor plan, home running cost statements (bond/rent, rates, electricity)', 'Home office deduction');
+  if (y.flags.homeOffice && y.homeOffice && y.homeOffice.basis !== 'business') add('holetter', 'Employer letter confirming the requirement / arrangement to work from home', 'Home office deduction');
+  if (y.flags.homeOffice && y.homeOffice && (y.homeOffice.assets || []).length) add('hoassets', 'Purchase invoices for work equipment (laptop, furniture…)', 'Wear-and-tear'); 
   if (y.flags.provisional) add('ita34', 'Latest ITA34 assessment (basic amount)', 'Provisional tax estimates');
   if (y.flags.provisional) add('irp6pay', 'Proof of provisional tax payments (IRP6)', 'Credits on assessment');
   add('bank', 'Bank details for refunds (confirmation letter)', 'SARS registered details');
@@ -165,32 +165,6 @@ SCREENS.documents = () => {
 // docs keys with ':' are stored with '_' – keep docList lookups consistent
 const _docList = docList;
 window.docList = function (c, y) { return _docList(c, y).map(d => Object.assign(d, (y.docs || {})[d.key.replace(/[:]/g, '_')] || {})); };
-
-// ---------- Time & fees (client) ----------
-SCREENS.fees = () => {
-  const c = cur(); c.fees = c.fees || []; c.invoices = c.invoices || [];
-  const B = S.settings.billing;
-  const unbilled = c.fees.filter(f => !f.invoiceNo);
-  const tot = (l) => l.reduce((a, f) => a + E.n(f.amount), 0);
-  return head('Time & fees', `Record work done for ${esc(clientName(c))} and issue invoices on your letterhead${B.vatRegistered ? ' (VAT ' + B.vatRate + '%)' : ''}.`, `<button class="btn" data-act="addfee">+ Time / fee entry</button><button class="btn btn-primary" data-act="invoice" ${unbilled.length ? '' : 'disabled'}>Create invoice (${money0(tot(unbilled))})</button>`) +
-  `<div class="card"><h2>Fee entries</h2><table class="t"><thead><tr><th style="width:140px">Date</th><th style="width:80px">Year</th><th>Description</th><th class="r" style="width:90px">Hours</th><th class="r" style="width:110px">Rate</th><th class="r" style="width:130px">Amount</th><th>Invoice</th><th></th></tr></thead><tbody>
-  ${c.fees.map((f, i) => f.invoiceNo ? `<tr class="done"><td>${dateLong(f.date)}</td><td>${f.year || ''}</td><td>${esc(f.desc)}</td><td class="r">${f.hours || ''}</td><td class="r">${f.rate ? E.fmt(f.rate, 2) : ''}</td><td class="r">${moneyCell(f.amount)}</td><td>${esc(f.invoiceNo)}</td><td></td></tr>` :
-    `<tr data-allow><td><input type="date" data-p="c.fees.${i}.date" value="${esc(f.date)}"></td><td><input type="text" class="num" data-num="int" data-p="c.fees.${i}.year" value="${f.year || ''}"></td><td><input type="text" data-p="c.fees.${i}.desc" value="${esc(f.desc)}" list="feeDescs"></td><td><input class="num" data-num="dec" data-p="c.fees.${i}.hours" value="${f.hours || ''}"></td><td><input class="num" data-num="money" data-p="c.fees.${i}.rate" value="${fmtInput(f.rate)}"></td><td><input class="num" data-num="money" data-p="c.fees.${i}.amount" value="${fmtInput(f.amount)}"></td><td class="muted">Unbilled</td><td><button class="btn btn-sm btn-danger" data-act="del" data-p="c.fees" data-i="${i}">✕</button></td></tr>`).join('') || '<tr><td colspan="8" class="muted">No entries. Hours × rate fills the amount automatically.</td></tr>'}
-  <tr class="sub"><td colspan="5">Unbilled</td><td class="r">${moneyCell(tot(unbilled))}</td><td colspan="2"></td></tr></tbody></table>
-  <datalist id="feeDescs">${['Provisional tax return – 1st period (IRP6)', 'Provisional tax return – 2nd period (IRP6)', 'Top-up payment calculation', 'Income tax return (ITR12) preparation and submission', 'Tax planning consultation', 'Tax computation and supporting schedules', 'SARS correspondence', 'Notice of objection', 'Verification / audit – supporting documents', 'Registration as provisional taxpayer'].map(x => `<option value="${x}">`).join('')}</datalist></div>
-  <div class="card"><h2>Invoices</h2><table class="t"><thead><tr><th>Invoice</th><th>Date</th><th>Due</th><th class="r">Total</th><th>Status</th><th></th></tr></thead><tbody>${c.invoices.map((inv, i) => `<tr><td><b>${esc(inv.no)}</b></td><td>${dateLong(inv.date)}</td><td>${dateLong(inv.dueDate)}</td><td class="r">${moneyCell(inv.total)}</td><td>${inv.paid ? `<span class="pill ok">Paid ${inv.paidDate ? dateLong(inv.paidDate) : ''}</span>` : inv.dueDate < new Date().toISOString().slice(0, 10) ? '<span class="pill bad">Overdue</span>' : '<span class="pill info">Unpaid</span>'}</td><td><div class="btn-row"><button class="btn btn-sm" data-report="invoice" data-arg="${esc(inv.no)}">View / PDF</button><button class="btn btn-sm" data-act="invpaid" data-i="${i}">${inv.paid ? 'Mark unpaid' : 'Mark paid'}</button><button class="btn btn-sm btn-danger" data-act="invdel" data-i="${i}">Cancel</button></div></td></tr>`).join('') || '<tr><td colspan="6" class="muted">No invoices yet.</td></tr>'}</tbody></table></div>`;
-};
-
-// ---------- Fees & billing (practice) ----------
-SCREENS.billing = () => {
-  const rows = S.clients.flatMap(c => (c.invoices || []).map(inv => ({ c, inv }))).sort((a, b) => b.inv.date.localeCompare(a.inv.date));
-  const unb = S.clients.map(c => ({ c, amt: (c.fees || []).filter(f => !f.invoiceNo).reduce((a, f) => a + E.n(f.amount), 0) })).filter(x => x.amt);
-  const out = rows.filter(r => !r.inv.paid).reduce((a, r) => a + r.inv.total, 0), paid = rows.filter(r => r.inv.paid).reduce((a, r) => a + r.inv.total, 0);
-  return head('Fees & billing', 'Invoices and unbilled time for the whole practice.', `<button class="btn" data-act="csv" data-what="fees">Export CSV</button><button class="btn btn-primary" data-report="feeregister">Fee register PDF</button>`) +
-  `<div class="kpis"><div class="kpi gold"><div class="k-label">Unbilled</div><div class="k-val">${money0(unb.reduce((a, x) => a + x.amt, 0))}</div><div class="k-sub">${unb.length} client(s)</div></div><div class="kpi red"><div class="k-label">Invoiced, unpaid</div><div class="k-val">${money0(out)}</div></div><div class="kpi green"><div class="k-label">Paid</div><div class="k-val">${money0(paid)}</div></div><div class="kpi"><div class="k-label">Invoices</div><div class="k-val">${rows.length}</div></div></div>
-  <div class="grid g2"><div class="card"><h2>Unbilled work</h2><table class="t"><tbody>${unb.map(x => `<tr class="clickable" data-act="openc" data-id="${x.c.id}" data-route="fees"><td>${esc(clientName(x.c))}</td><td class="r">${moneyCell(x.amt)}</td></tr>`).join('') || '<tr><td class="muted">Nothing unbilled.</td></tr>'}</tbody></table></div>
-  <div class="card"><h2>Invoices</h2><table class="t"><thead><tr><th>No.</th><th>Client</th><th>Date</th><th class="r">Total</th><th>Status</th></tr></thead><tbody>${rows.map(r => `<tr class="clickable" data-act="openc" data-id="${r.c.id}" data-route="fees"><td>${esc(r.inv.no)}</td><td>${esc(clientName(r.c))}</td><td>${dateLong(r.inv.date)}</td><td class="r">${moneyCell(r.inv.total)}</td><td>${r.inv.paid ? '<span class="pill ok">Paid</span>' : '<span class="pill warn">Unpaid</span>'}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No invoices.</td></tr>'}</tbody></table></div></div>`;
-};
 
 // ---------- Change log ----------
 SCREENS.auditlog = () => {
@@ -278,7 +252,7 @@ SCREENS.dashboard = () => {
   const multi = yrs.length > 1 ? svgBars(yrs.map(String), [{ name: 'Taxable income', values: rs.map(x => x ? x.taxableIncome : 0) }, { name: 'Tax liability', values: rs.map(x => x ? x.liability : 0) }, { name: 'PAYE + IRP6 paid', values: rs.map(x => x ? x.credits : 0) }], { width: 520, height: 190 }) : '<p class="muted">Capture more tax years to see the trend.</p>';
   const docs = window.docList(c, yd()); const got = docs.filter(d => d.received).length;
   return _dashboard().replace('<div class="card"><div class="card-head"><h2>Review points', `<div class="grid g2"><div class="card"><h2>Income mix</h2>${svgDonut(incomeMix(r), 170, { center: 'Income' })}</div><div class="card"><h2>Year-on-year</h2>${multi}</div></div>
-  <div class="card"><div class="card-head"><h2>Engagement</h2><button class="btn btn-sm" data-route="documents">Documents →</button><button class="btn btn-sm" data-route="fees">Fees →</button></div><div class="pipeline"><div class="pipe"><b>${esc(yd().status || 'Not started')}</b><span>Status</span></div><div class="pipe"><b>${got}/${docs.length}</b><span>Documents received</span></div><div class="pipe"><b>${money0((c.fees || []).filter(f => !f.invoiceNo).reduce((a, f) => a + E.n(f.amount), 0))}</b><span>Unbilled fees</span></div><div class="pipe"><b>${yd().locked ? '🔒 Locked' : 'Open'}</b><span>Year</span></div></div></div>
+  <div class="card"><div class="card-head"><h2>Engagement</h2><button class="btn btn-sm" data-route="documents">Documents →</button><button class="btn btn-sm" data-route="fees">Time →</button></div><div class="pipeline"><div class="pipe"><b>${esc(yd().status || 'Not started')}</b><span>Status</span></div><div class="pipe"><b>${got}/${docs.length}</b><span>Documents received</span></div><div class="pipe"><b>${E.fmt((c.fees || []).filter(f => Number(f.year) === S.year).reduce((a, f) => a + E.n(f.hours), 0), 1)} h</b><span>Time recorded ${S.year}</span></div><div class="pipe"><b>${yd().locked ? '🔒 Locked' : 'Open'}</b><span>Year</span></div></div></div>
   <div class="card"><div class="card-head"><h2>Review points`);
 };
 const _employment = SCREENS.employment;
@@ -288,7 +262,7 @@ SCREENS.clients = () => _clients().replace('<button class="btn" data-report="reg
 const _settings = SCREENS.settings;
 SCREENS.settings = () => {
   const B = S.settings.billing, sec = S.settings.security;
-  return _settings() + `<div class="grid g2"><div class="card"><h2>Billing & invoices</h2><div class="grid g3">${f({ p: 's.billing.vatRegistered', label: 'VAT registered', type: 'check' })}${f({ p: 's.billing.vatNumber', label: 'VAT number' })}${f({ p: 's.billing.vatRate', label: 'VAT rate %', type: 'dec' })}${f({ p: 's.billing.invoicePrefix', label: 'Invoice prefix' })}${f({ p: 's.billing.nextInvoice', label: 'Next invoice number', type: 'int' })}${f({ p: 's.billing.paymentTerms', label: 'Payment terms (days)', type: 'int' })}${f({ p: 's.billing.defaultRate', label: 'Default hourly rate', type: 'money' })}${f({ p: 's.billing.engagementFee', label: 'Fee basis for engagement letters', placeholder: 'e.g. R950 per hour' })}<div></div>${f({ p: 's.billing.bankName', label: 'Bank' })}${f({ p: 's.billing.accountName', label: 'Account name' })}${f({ p: 's.billing.accountNumber', label: 'Account number' })}${f({ p: 's.billing.branchCode', label: 'Branch code' })}</div></div>
+  return _settings() + `<div class="grid g2"><div class="card"><h2>Fees (time records & engagement letters)</h2><div class="grid g3">${f({ p: 's.billing.defaultRate', label: 'Default hourly rate', type: 'money' })}${f({ p: 's.billing.paymentTerms', label: 'Payment terms in engagement letters (days)', type: 'int' })}<div></div></div><div style="margin-top:12px">${f({ p: 's.billing.engagementFee', label: 'Fee basis for engagement letters', placeholder: 'e.g. R950 per hour' })}</div></div>
   <div class="card"><h2>Security & start-up</h2><p class="muted">Client files contain personal information (POPIA). Protect the app with a PIN.</p><div class="btn-row">${sec.pinHash ? '<span class="pill ok">PIN set</span><button class="btn" data-act="setpin">Change PIN</button><button class="btn btn-danger" data-act="clearpin">Remove PIN</button>' : '<button class="btn btn-primary" data-act="setpin">Set a PIN</button>'}</div><div class="grid g2" style="margin-top:12px">${f({ p: 's.security.lockMinutes', label: 'Auto-lock after minutes idle (0 = never)', type: 'int' })}${f({ p: 's.defaultHome', label: 'Start-up screen', type: 'select', options: [['practice', 'Practice dashboard'], ['client', 'Last client']] })}</div></div></div>`;
 };
 
@@ -307,21 +281,6 @@ const ACTIONS2 = {
   async unlockyear() { if (!(await confirmBox(`Unlock the ${S.year} tax year for editing?`, 'Unlock'))) return; yd().locked = false; App.log('y.locked', true, false); markDirty(); App.refresh(); },
   docadd() { const m = modal({ title: 'Add document request', body: '<input type="text" id="docLbl" placeholder="e.g. Letter from employer confirming home office requirement">', foot: '<button class="btn" data-close>Cancel</button><button class="btn btn-primary" id="docOk">Add</button>' }); const i = m.el.querySelector('#docLbl'); i.focus(); const ok = () => { if (i.value.trim()) { yd().docsCustom = yd().docsCustom || []; yd().docsCustom.push({ label: i.value.trim() }); markDirty(); } m.el.remove(); App.refresh(); }; m.el.querySelector('#docOk').onclick = ok; i.onkeydown = e => { if (e.key === 'Enter') ok(); }; },
   addfee() { const c = cur(); c.fees = c.fees || []; c.fees.push({ id: 'f' + Date.now().toString(36), date: new Date().toISOString().slice(0, 10), year: S.year, desc: '', hours: 0, rate: E.n(S.settings.billing.defaultRate), amount: 0 }); markDirty(); App.refresh(); const n = document.querySelector(`[data-p="c.fees.${c.fees.length - 1}.desc"]`); if (n) n.focus(); },
-  async invoice() {
-    const c = cur(), B = S.settings.billing, items = (c.fees || []).filter(f => !f.invoiceNo && E.n(f.amount));
-    if (!items.length) { toast('No unbilled amounts.'); return; }
-    const no = `${B.invoicePrefix || 'INV'}${String(E.n(B.nextInvoice) || 1).padStart(4, '0')}`;
-    const subtotal = E.r2(items.reduce((a, f) => a + E.n(f.amount), 0)), vat = B.vatRegistered ? E.r2(subtotal * E.n(B.vatRate) / 100) : 0;
-    const date = new Date().toISOString().slice(0, 10);
-    if (!(await confirmBox(`Create invoice <b>${no}</b> for ${money(subtotal + vat)} (${items.length} item(s))?`, 'Create invoice'))) return;
-    c.invoices = c.invoices || [];
-    c.invoices.push({ no, date, dueDate: addDays(date, E.n(B.paymentTerms) || 30), year: S.year, items: items.map(f => ({ date: f.date, desc: f.desc, hours: f.hours, rate: f.rate, amount: E.n(f.amount) })), subtotal, vat, vatRate: B.vatRegistered ? E.n(B.vatRate) : 0, total: E.r2(subtotal + vat), paid: false });
-    items.forEach(f => { f.invoiceNo = no; });
-    B.nextInvoice = (E.n(B.nextInvoice) || 1) + 1;
-    markDirty(); App.refresh(); REPORTS.preview('invoice', no);
-  },
-  invpaid(t, ds) { const inv = cur().invoices[Number(ds.i)]; inv.paid = !inv.paid; inv.paidDate = inv.paid ? new Date().toISOString().slice(0, 10) : ''; markDirty(); App.refresh(); },
-  async invdel(t, ds) { const c = cur(), inv = c.invoices[Number(ds.i)]; if (!(await confirmBox(`Cancel invoice ${esc(inv.no)}? Its entries become unbilled again.`, 'Cancel invoice'))) return; (c.fees || []).forEach(f => { if (f.invoiceNo === inv.no) delete f.invoiceNo; }); c.invoices.splice(Number(ds.i), 1); markDirty(); App.refresh(); },
   useann(t, ds) { const v = Number(ds.v); setP(`y.provisional.${ds.k}.estimateTI`, v); if (ds.k === 'p1') yd().provisional.p1.useBasic = false; App.log(`y.provisional.${ds.k}.estimateTI`, null, v); markDirty(); App.refresh(); toast('Estimate updated'); },
   async setpin() {
     const m = modal({ title: 'Set PIN', body: '<div class="grid g2"><div class="field"><label>New PIN (4+ digits)</label><input type="password" id="pin1"></div><div class="field"><label>Repeat PIN</label><input type="password" id="pin2"></div></div>', foot: '<button class="btn" data-close>Cancel</button><button class="btn btn-primary" id="pinOk">Save PIN</button>' });
@@ -334,7 +293,7 @@ const ACTIONS2 = {
     if (ds.what === 'computation') { const r = result(), c = cur(); name = `Computation ${clientName(c)} ${S.year}.csv`; rows = [['Section', 'Code', 'Description', 'Amount']].concat(r.lines.map(l => [l.section, l.code, l.label, l.kind === 'note' ? '' : l.amount])); rows.push(['', '', 'Taxable income', r.taxableIncome], ['', '', 'Normal tax', r.normalTax], ['', '', 'Lump sum tax', r.lump.total], ['', '', 'Total liability', r.liability], ['', '4102', 'PAYE', -r.paye], ['', '', 'Provisional paid', -r.provisionalPaid], ['', '', 'Balance', r.balance]); }
     if (ds.what === 'register') { name = `Client register ${S.year}.csv`; rows = [['Client', 'Tax number', 'ID number', 'Email', 'Phone', 'Provisional', 'Status', 'Taxable income', 'Liability', 'Balance']].concat(S.clients.map(c => { const y = c.years[S.year], r = safeResult(c, S.year); return [clientName(c), c.taxRef, c.idNumber, c.email, c.phone, y && y.flags.provisional ? 'Yes' : 'No', (y && y.status) || '', r ? r.taxableIncome : '', r ? r.liability : '', r ? r.balance : '']; })); }
     if (ds.what === 'deadlines') { name = 'Deadlines.csv'; rows = [['Date', 'Client', 'Tax number', 'Year', 'Item', 'Amount', 'Paid', 'Status']].concat(allDeadlines().map(d => [d.date, clientName(d.c), d.c.taxRef, d.yr, d.label, d.amount ?? '', d.paid || '', d.done ? 'Done' : d.overdue ? 'Overdue' : 'Open'])); }
-    if (ds.what === 'fees') { name = 'Fees.csv'; rows = [['Client', 'Date', 'Year', 'Description', 'Hours', 'Rate', 'Amount', 'Invoice', 'Invoice paid']].concat(S.clients.flatMap(c => (c.fees || []).map(f => { const inv = (c.invoices || []).find(i => i.no === f.invoiceNo); return [clientName(c), f.date, f.year, f.desc, f.hours, f.rate, f.amount, f.invoiceNo || '', inv ? (inv.paid ? 'Yes' : 'No') : '']; }))); }
+    if (ds.what === 'fees') { name = 'Time records.csv'; rows = [['Client', 'Tax number', 'Date', 'Tax year', 'Work done', 'Hours', 'Rate', 'Value']].concat(S.clients.flatMap(c => (c.fees || []).map(f => [clientName(c), c.taxRef, f.date, f.year, f.desc, f.hours, f.rate, f.amount]))); }
     const p = await window.intax.exportCsv(toCsv(rows), name.replace(/[\\/:*?"<>|]/g, ''));
     if (p) toast('Saved ' + p);
   },
@@ -351,8 +310,6 @@ const ACTIONS2 = {
       base.rental = from.rental.map(p => Object.assign(E.clone(p), { rent: sc(p.rent), expenses: (p.expenses || []).map(e => ({ desc: e.desc, amount: sc(e.amount) })) }));
       Object.keys(base.investments).forEach(k => base.investments[k] = sc(from.investments[k]));
       base.medical = Object.assign(E.clone(from.medical), { contributions: sc(from.medical.contributions), qme: sc(from.medical.qme) });
-      base.travel = Object.assign(E.clone(from.travel), { totalKm: keep ? from.travel.totalKm : 0, businessKm: keep ? from.travel.businessKm : 0 });
-      base.companyCar = E.clone(from.companyCar || base.companyCar);
       base.other = (from.other || []).map(o => Object.assign(E.clone(o), { amount: sc(o.amount) }));
       base.deductions.raContrib = sc(from.deductions.raContrib); base.deductions.donations = sc(from.deductions.donations); base.deductions.homeOffice = sc(from.deductions.homeOffice);
       base.deductions.other = (from.deductions.other || []).map(o => ({ desc: o.desc, amount: sc(o.amount) }));
