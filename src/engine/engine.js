@@ -76,6 +76,12 @@ function emptyYear(year) {
     other: [],
     deductions: { raContrib: 0, raCarryForward: 0, donations: 0, donationsCarryForward: 0, homeOffice: 0, assessedLossBF: 0, other: [] },
     medical: { onScheme: false, months: 12, dependants: 0, contributions: 0, qme: 0, disability: false },
+    companyCar: { enabled: false, determinedValue: 0, maintenancePlan: false, months: 12, totalKm: 0, businessKm: 0, fuelBorne: false, maintBorne: false, insurance: 0, licence: 0 },
+    tfsa: { contributions: 0, priorTotal: 0 },
+    cop: null, // null = follow marital status; true/false = override
+    assessment: { date: '', reference: '', taxableIncome: null, normalTax: null, paye: null, provisional: null, interest: 0, penalties: 0, balance: null, notes: '' },
+    finalOpts: { expectedAssessmentDate: '' },
+    docs: {}, docsCustom: [],
     travel: { enabled: false, method: 'best', vehicleValue: 0, totalKm: 0, businessKm: 0, daysUsed: 365, fuelBorne: true, maintBorne: true, actual: { fuel: 0, maintenance: 0, insurance: 0, licence: 0, interest: 0, lease: 0 }, vehicleCost: 0 },
     provisional: {
       basicAmount: { lastAssessedYear: year - 1, lastAssessedTI: 0, lessCapitalGain: 0, lessLumpSums: 0 },
@@ -147,18 +153,21 @@ function travelClaim(tr, pack, allowance) {
 }
 
 // ---------- capital gains ----------
-function cgtCalc(cg, pack, age) {
+function cgtCalc(cg, pack, age, share) {
+  share = share || 1;
   const items = (cg && cg.items) || [];
   const rows = items.map(it => {
-    const proceeds = n(it.proceeds), base = n(it.baseCost) + n(it.costs);
+    const sh = it.type === 'personal' ? 1 : share;
+    const fullProceeds = n(it.proceeds);
+    const proceeds = fullProceeds * sh, base = (n(it.baseCost) + n(it.costs)) * sh;
     let gain = proceeds - base, exclusion = 0;
     if (it.type === 'primary' && gain > 0) {
-      if (proceeds <= 2000000 && pack.year < 2027) exclusion = gain; // proceeds ≤ R2m rule (pre-2027)
-      else if (proceeds <= 3000000 && pack.year >= 2027) exclusion = gain;
-      else exclusion = Math.min(gain, pack.cgt.primaryResidence);
+      if (fullProceeds <= 2000000 && pack.year < 2027) exclusion = gain; // proceeds ≤ R2m rule (pre-2027)
+      else if (fullProceeds <= 3000000 && pack.year >= 2027) exclusion = gain;
+      else exclusion = Math.min(gain, pack.cgt.primaryResidence * sh);
     }
     if (it.type === 'personal') { exclusion = gain; } // personal-use assets disregarded
-    return { desc: it.desc || '', type: it.type || 'other', proceeds, base, gain: r2(gain), exclusion: r2(exclusion), net: r2(gain - exclusion) };
+    return { desc: it.desc || '', type: it.type || 'other', date: it.date || '', proceeds: r2(proceeds), base: r2(base), gain: r2(gain), exclusion: r2(exclusion), net: r2(gain - exclusion) };
   });
   const aggregate = sum(rows, r => r.net) - n(cg && cg.smallBusinessExclusion);
   const annualExcl = cg && cg.yearOfDeath ? pack.cgt.deathExclusion : pack.cgt.annualExclusion;
@@ -204,14 +213,89 @@ function medicalCredits(y, pack, age, ti, contributionsTotal) {
   return { months, dependants: deps, perMonth, mtc: r2(mtc), contributions: r2(contributionsTotal), qme: r2(qme), additional: r2(additional), basis };
 }
 
+// ---------- company car (para 7, Seventh Schedule) ----------
+function companyCarCalc(cc, pack, irpValue) {
+  const res = { enabled: false, value: 0, calculated: 0, reduction: 0, fromIrp5: irpValue > 0, notes: [] };
+  if (!cc || !cc.enabled) return res;
+  res.enabled = true;
+  const rate = cc.maintenancePlan ? pack.companyCar.maintenancePlan : pack.companyCar.standard;
+  const months = Math.min(12, Math.max(0, n(cc.months) || 12));
+  res.rate = rate; res.months = months;
+  res.calculated = r2(n(cc.determinedValue) * rate * months);
+  res.value = irpValue > 0 ? irpValue : res.calculated;
+  const total = n(cc.totalKm), bus = Math.min(n(cc.businessKm), total), priv = Math.max(0, total - bus);
+  const band = travelBand(pack, n(cc.determinedValue));
+  res.band = band;
+  res.businessPart = total ? res.value * bus / total : 0;
+  res.fuelPart = cc.fuelBorne ? priv * band.fuel / 100 : 0;
+  res.maintPart = cc.maintBorne && !cc.maintenancePlan ? priv * band.maint / 100 : 0;
+  res.otherPart = n(cc.insurance) + n(cc.licence);
+  res.reduction = r2(Math.min(res.value, res.businessPart + res.fuelPart + res.maintPart + res.otherPart));
+  res.businessPart = r2(res.businessPart); res.fuelPart = r2(res.fuelPart); res.maintPart = r2(res.maintPart);
+  if (!total) res.notes.push('Enter total and business kilometres from the logbook to reduce the fringe benefit.');
+  return res;
+}
+
+// ---------- tax by bracket ----------
+function taxByBracket(ti, brackets) {
+  const out = [];
+  for (let i = 0; i < brackets.length; i++) {
+    const b = brackets[i], to = i + 1 < brackets.length ? brackets[i + 1].from : Infinity;
+    const inBand = Math.max(0, Math.min(ti, to) - b.from);
+    out.push({ from: b.from, to: to === Infinity ? null : to, rate: b.rate, amount: r2(inBand), tax: r2(inBand * b.rate) });
+  }
+  return out;
+}
+
+// ---------- business days / SA public holidays ----------
+function easterSunday(y) {
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(Date.UTC(y, month - 1, day));
+}
+const iso = (d) => d.toISOString().slice(0, 10);
+function saHolidays(y) {
+  const set = new Set();
+  const fixed = ['01-01', '03-21', '04-27', '05-01', '06-16', '08-09', '09-24', '12-16', '12-25', '12-26'];
+  for (const md of fixed) {
+    const d = new Date(`${y}-${md}T00:00:00Z`); set.add(iso(d));
+    if (d.getUTCDay() === 0) { const m = new Date(d); m.setUTCDate(m.getUTCDate() + 1); set.add(iso(m)); } // Sunday -> Monday
+  }
+  const e = easterSunday(y);
+  const gf = new Date(e); gf.setUTCDate(e.getUTCDate() - 2); set.add(iso(gf));
+  const fd = new Date(e); fd.setUTCDate(e.getUTCDate() + 1); set.add(iso(fd));
+  return set;
+}
+function isBusinessDay(d) {
+  const day = d.getUTCDay(); if (day === 0 || day === 6) return false;
+  return !saHolidays(d.getUTCFullYear()).has(iso(d));
+}
+function addBusinessDays(dateIso, count) {
+  if (!dateIso) return '';
+  const d = new Date(dateIso + 'T00:00:00Z'); if (isNaN(d)) return '';
+  let left = count;
+  while (left > 0) { d.setUTCDate(d.getUTCDate() + 1); if (isBusinessDay(d)) left--; }
+  return iso(d);
+}
+// SARS due dates fall on the last business day when the date is not a business day.
+function lastBusinessDayOnOrBefore(dateIso) {
+  const d = new Date(dateIso + 'T00:00:00Z');
+  while (!isBusinessDay(d)) d.setUTCDate(d.getUTCDate() - 1);
+  return iso(d);
+}
+function daysBetween(a, b) { return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000); }
+
 // ---------- the main computation ----------
 function compute(client, y, pack, codeList, opts) {
   opts = opts || {};
   const age = ageAtYearEnd(client && client.dob, pack);
+  const cop = y.cop === true || ((y.cop === null || y.cop === undefined) && client && client.maritalStatus === 'Married in community of property');
+  const share = cop ? 0.5 : 1;
   const irp = aggregateIrp5(y.irp5, codeList);
   const A = irp.agg;
   const lines = []; // {section, label, amount, code, kind:'income'|'deduction'|'info'}
-  const add = (section, label, amount, code, kind) => { amount = r2(amount); if (amount || kind === 'force') lines.push({ section, label, amount, code: code || '', kind: kind || 'income' }); return amount; };
+  const add = (section, label, amount, code, kind) => { amount = r2(amount); if (amount || kind === 'note') lines.push({ section, label, amount, code: code || '', kind: kind || 'income' }); return amount; };
 
   // Employment
   const employment = A.income + A.pension + A.travel + A.fringe + A.medFringe + A.retFringe;
@@ -220,6 +304,12 @@ function compute(client, y, pack, codeList, opts) {
     const t = c ? c.treat : 'income';
     if (['income', 'pension', 'travel', 'fringe', 'medFringe', 'retFringe'].includes(t)) add('Employment (IRP5)', c ? c.name : 'Code ' + code, irp.byCode[code], code);
   });
+
+  // Company car
+  const carIrp = n(irp.byCode['3802']) + n(irp.byCode['3816']);
+  const car = companyCarCalc(y.companyCar, pack, carIrp);
+  let carAdded = 0;
+  if (car.enabled && !car.fromIrp5 && car.calculated) { carAdded = car.calculated; add('Employment (IRP5)', 'Company car fringe benefit (calculated, not on IRP5)', carAdded, '3802'); }
 
   // Foreign employment
   const F = y.foreign || {};
@@ -241,8 +331,8 @@ function compute(client, y, pack, codeList, opts) {
 
   // Rental
   const rental = (y.rental || []).map(p => {
-    const share = (n(p.sharePct) || 100) / 100;
-    const inc = n(p.rent) * share, exp = sum(p.expenses, e => e.amount) * share;
+    const pshare = (n(p.sharePct) || 100) / 100 * (p.separateProperty ? 1 : share);
+    const inc = n(p.rent) * pshare, exp = sum(p.expenses, e => e.amount) * pshare;
     return { name: p.property || 'Property', income: r2(inc), expenses: r2(exp), net: r2(inc - exp) };
   });
   rental.forEach(p => add('Rental', p.name + ' – net ' + (p.net < 0 ? 'loss' : 'income'), p.net));
@@ -251,11 +341,12 @@ function compute(client, y, pack, codeList, opts) {
   // Investments
   const I = y.investments || {};
   const exemptLimit = age !== null && age >= 65 ? pack.interestExemption.over65 : pack.interestExemption.under65;
-  const li = n(I.localInterest); const liExempt = Math.min(li, exemptLimit);
+  if (cop) add('Investments', 'Joint estate: 50% of interest, dividends, rental and capital gains included', 0, '', 'note');
+  const li = n(I.localInterest) * share; const liExempt = Math.min(li, exemptLimit);
   if (li) { add('Investments', 'Local interest', li); add('Investments', 'Less: interest exemption (s10(1)(i))', -liExempt); }
-  const fi = n(I.foreignInterest); if (fi) add('Investments', 'Foreign interest', fi);
-  const reit = n(I.reitDividends); if (reit) add('Investments', 'Dividends from SA REITs', reit);
-  const fd = n(I.foreignDividends); const fdExempt = fd * pack.foreignDividendExemptFraction;
+  const fi = n(I.foreignInterest) * share; if (fi) add('Investments', 'Foreign interest', fi);
+  const reit = n(I.reitDividends) * share; if (reit) add('Investments', 'Dividends from SA REITs', reit);
+  const fd = n(I.foreignDividends) * share; const fdExempt = fd * pack.foreignDividendExemptFraction;
   if (fd) { add('Investments', 'Foreign dividends', fd); add('Investments', 'Less: s10B(3) exempt portion', -fdExempt); }
   const investNet = li - liExempt + fi + reit + fd - fdExempt;
 
@@ -265,22 +356,23 @@ function compute(client, y, pack, codeList, opts) {
   const savingsWd = n((y.lumps || {}).savingsWithdrawal) + n(A.savingsWd);
   if (savingsWd) add('Other income', 'Two-pot savings withdrawal benefit', savingsWd);
 
-  const incomeTotal = employment + (fEmp - fExempt) + fOther + businessNet + rentalNet + investNet + otherTaxable + savingsWd;
+  const incomeTotal = employment + carAdded + (fEmp - fExempt) + fOther + businessNet + rentalNet + investNet + otherTaxable + savingsWd;
 
   // Deductions
   const D = y.deductions || {};
   const travelAllowance = A.travel;
   const travel = travelClaim(y.travel, pack, travelAllowance);
   if (travel.chosen) add('Deductions', 'Travel expenses (' + (travel.method === 'actual' ? 'actual cost' : 'deemed cost') + ', logbook)', -travel.chosen, '', 'deduction');
+  if (car.reduction) add('Deductions', 'Company car fringe benefit reduction (para 7(7)/(8), logbook)', -car.reduction, '', 'deduction');
   const homeOffice = n(D.homeOffice); if (homeOffice) add('Deductions', 'Home office expenses', -homeOffice, '', 'deduction');
   const otherDed = sum(D.other, x => x.amount); (D.other || []).filter(x => n(x.amount)).forEach(x => add('Deductions', x.desc || 'Other deduction', -n(x.amount), '', 'deduction'));
-  let tiBeforeLoss = incomeTotal - travel.chosen - homeOffice - otherDed;
+  let tiBeforeLoss = incomeTotal - travel.chosen - car.reduction - homeOffice - otherDed;
   const lossBF = n(D.assessedLossBF);
   if (lossBF) add('Deductions', 'Assessed loss brought forward', -lossBF, '', 'deduction');
   const tiBeforeRA = tiBeforeLoss - lossBF;
 
   // s11F retirement contributions
-  const remuneration = employment + (fEmp - fExempt);
+  const remuneration = employment + carAdded - car.reduction + (fEmp - fExempt);
   const raContributions = A.retContrib + A.retFringe + n(D.raContrib);
   const raAvailable = raContributions + n(D.raCarryForward);
   const raLimitPct = pack.retirement.pct * Math.max(remuneration, tiBeforeRA);
@@ -290,7 +382,7 @@ function compute(client, y, pack, codeList, opts) {
   const tiAfterRA = tiBeforeRA - raAllowed;
 
   // Capital gains
-  const cgt = cgtCalc(y.cgt, pack, age);
+  const cgt = cgtCalc(y.cgt, pack, age, share);
   if (cgt.taxableGain) add('Capital gains', 'Taxable capital gain (' + Math.round(cgt.inclusionRate * 100) + '% inclusion)', cgt.taxableGain);
   const tiBeforeDonations = tiAfterRA + cgt.taxableGain;
 
@@ -314,7 +406,13 @@ function compute(client, y, pack, codeList, opts) {
   const normalTaxPayable = tax;
 
   const lump = lumpSumTax(y, pack, irp);
-  const liability = normalTaxPayable + lump.total;
+  const T = y.tfsa || {};
+  const tContrib = n(T.contributions), tPrior = n(T.priorTotal);
+  const tAnnualExcess = Math.max(0, tContrib - pack.tfsa.annual);
+  const tLifeExcess = Math.max(0, tPrior + tContrib - pack.tfsa.lifetime) - Math.max(0, tPrior - pack.tfsa.lifetime);
+  const tfsaExcess = Math.max(tAnnualExcess, tLifeExcess);
+  const tfsaTax = r2(tfsaExcess * 0.40);
+  const liability = normalTaxPayable + lump.total + tfsaTax;
 
   const P = y.provisional || {};
   const provisionalPaid = n(P.p1 && P.p1.paid) + n(P.p2 && P.p2.paid) + n(P.p3 && P.p3.paid);
@@ -326,7 +424,7 @@ function compute(client, y, pack, codeList, opts) {
     year: pack.year, packLabel: pack.label, age, irp5: irp, lines,
     employment: r2(employment), foreignEmployment: r2(fEmp), foreignExempt: r2(fExempt),
     business, businessNet: r2(businessNet), rental, rentalNet: r2(rentalNet),
-    interest: { local: li, exempt: r2(liExempt), foreign: fi, limit: exemptLimit }, dividends: { local: n(I.localDividends), reit, foreign: fd, foreignExempt: r2(fdExempt), dwt: n(I.dividendsTaxWithheld) },
+    interest: { local: li, exempt: r2(liExempt), foreign: fi, limit: exemptLimit }, dividends: { local: n(I.localDividends) * share, reit, foreign: fd, foreignExempt: r2(fdExempt), dwt: n(I.dividendsTaxWithheld) },
     investNet: r2(investNet), otherIncome: r2(otherTaxable), savingsWithdrawal: r2(savingsWd),
     incomeTotal: r2(incomeTotal), travel, homeOffice, otherDeductions: r2(otherDed), assessedLossBF: lossBF,
     ra: { contributions: r2(raContributions), carriedIn: n(D.raCarryForward), remuneration: r2(remuneration), limitPct: r2(raLimitPct), cap: pack.retirement.cap, allowed: r2(raAllowed), carryForward: r2(raCF) },
@@ -337,9 +435,15 @@ function compute(client, y, pack, codeList, opts) {
     foreignTaxCredit: r2(ftc), normalTax: r2(normalTaxPayable), lump, liability: r2(liability),
     paye: r2(paye), provisionalPaid: r2(provisionalPaid), credits: r2(credits), balance: r2(balance),
     effectiveRate: incomeTotal > 0 ? r2(normalTaxPayable / Math.max(1, incomeTotal + cgt.taxableGain) * 100) : 0,
-    marginalRate: marginalRate(pack.brackets, ti)
+    marginalRate: marginalRate(pack.brackets, ti),
+    cop, share, companyCar: car,
+    totalDeductions: r2(travel.chosen + car.reduction + homeOffice + otherDed + lossBF + raAllowed + donAllowed),
+    tfsa: { contributions: tContrib, priorTotal: tPrior, annualLimit: pack.tfsa.annual, lifetimeLimit: pack.tfsa.lifetime, annualRoom: r2(Math.max(0, pack.tfsa.annual - tContrib)), lifetimeRoom: r2(Math.max(0, pack.tfsa.lifetime - tPrior - tContrib)), excess: r2(tfsaExcess), tax: tfsaTax },
+    brackets: taxByBracket(ti, pack.brackets)
   };
   res.provisional = provisionalCalc(client, y, pack, res, opts);
+  res.interest89 = assessmentInterest(y, res, opts);
+  res.recon = assessmentRecon(y, res);
   res.warnings = warnings(client, y, pack, res);
   return res;
 }
@@ -351,7 +455,7 @@ function taxOnEstimate(ti, age, pack, mtc, additional, ftc) {
 }
 function dueDates(pack) {
   const y = pack.year;
-  return { p1: `${y - 1}-08-31`, p2: pack.end, p3: `${y}-09-30`, p3Small: `${y}-08-31` };
+  return { p1: lastBusinessDayOnOrBefore(`${y - 1}-08-31`), p2: lastBusinessDayOnOrBefore(pack.end), p3: `${y}-09-30`, p3Small: `${y}-08-31` };
 }
 function basicAmount(y, pack) {
   const B = ((y.provisional || {}).basicAmount) || {};
@@ -411,6 +515,35 @@ function provisionalCalc(client, y, pack, res, opts) {
   };
 }
 
+// ---------- interest on underpayment (s89quat) and assessment reconciliation ----------
+function assessmentInterest(y, res, opts) {
+  const rate = n(opts && opts.interestRate) / 100;
+  const date = (y.assessment && y.assessment.date) || (y.finalOpts && y.finalOpts.expectedAssessmentDate) || '';
+  const effective = res.provisional.p3.dueDate;
+  const out = { rate: rate * 100, effectiveDate: effective, assessmentDate: date, days: 0, amount: 0, applies: false };
+  if (!(y.flags && y.flags.provisional) || !date || !rate || res.balance <= 0) return out;
+  // Interest runs from the effective date on the normal tax still owing after PAYE and provisional payments.
+  const owing = Math.max(0, res.normalTax - res.paye - res.provisionalPaid);
+  const days = Math.max(0, daysBetween(effective, date));
+  out.days = days; out.owing = r2(owing); out.amount = r2(owing * rate * days / 365); out.applies = days > 0 && owing > 0;
+  return out;
+}
+function assessmentRecon(y, res) {
+  const a = y.assessment || {};
+  const has = (v) => v !== null && v !== undefined && v !== '';
+  if (!has(a.taxableIncome) && !has(a.normalTax) && !has(a.balance)) return { entered: false };
+  const rows = [
+    ['Taxable income', res.taxableIncome, a.taxableIncome],
+    ['Normal tax (after rebates & credits)', res.normalTax, a.normalTax],
+    ['Employees’ tax (PAYE)', res.paye, a.paye],
+    ['Provisional tax paid', res.provisionalPaid, a.provisional],
+    ['Balance per assessment', res.balance, a.balance]
+  ].map(([label, plan, sars]) => ({ label, plan: r2(plan), sars: has(sars) ? r2(n(sars)) : null, diff: has(sars) ? r2(n(sars) - plan) : null }));
+  const objectionDeadline = a.date ? addBusinessDays(a.date, 80) : '';
+  const material = rows.some(r => r.diff !== null && Math.abs(r.diff) > 100);
+  return { entered: true, rows, interest: n(a.interest), penalties: n(a.penalties), objectionDeadline, material };
+}
+
 // ---------- warnings and tips (the "deduction finder" uses these too) ----------
 function warnings(client, y, pack, res) {
   const w = [];
@@ -426,6 +559,11 @@ function warnings(client, y, pack, res) {
   const nonEmp = res.businessNet + res.rentalNet + res.investNet + res.otherIncome + res.cgt.taxableGain;
   if (nonEmp > 30000 && !(y.flags && y.flags.provisional)) w.push({ level: 'warn', text: 'You have more than R30 000 of income not taxed through PAYE – you are probably a provisional taxpayer and must submit IRP6 returns.', go: 'provisional' });
   if (res.provisional && !res.provisional.penalty.ok && y.flags && y.flags.provisional) w.push({ level: 'warn', text: `Second provisional estimate is below the safe level (R${fmt(res.provisional.penalty.targetTI)}). Possible underestimation penalty of R${fmt(res.provisional.penalty.amount)}.`, go: 'p2' });
+  if (res.tfsa.excess > 0) w.push({ level: 'warn', text: `Tax-free savings contributions exceed the limit by R${fmt(res.tfsa.excess)} – 40% tax of R${fmt(res.tfsa.tax)} is payable.`, go: 'investments' });
+  if (res.companyCar.fromIrp5 && !res.companyCar.enabled) w.push({ level: 'tip', text: 'A company car fringe benefit is on the IRP5. With a logbook it can be reduced for business kilometres and private costs paid personally.', go: 'companycar' });
+  if (res.cop) w.push({ level: 'info', text: 'Married in community of property: 50% of interest, dividends, rental income and capital gains is taxed in each spouse’s hands.', go: 'client' });
+  if (res.recon && res.recon.entered && res.recon.material) w.push({ level: 'warn', text: `The SARS assessment differs from the plan. Objection deadline: ${res.recon.objectionDeadline || 'enter the assessment date'}.`, go: 'assessment' });
+  if (res.interest89 && res.interest89.applies) w.push({ level: 'info', text: `Interest of about R${fmt(res.interest89.amount)} (s89quat) is expected on tax owing from ${res.interest89.effectiveDate} to the assessment date.`, go: 'p3' });
   if (res.businessNet < 0) w.push({ level: 'info', text: 'Business loss set off against other income – check the s20A ring-fencing rules if you have losses in 3 of the last 5 years.', go: 'business' });
   return w;
 }
@@ -435,6 +573,6 @@ function fmt(v, dec) {
   return x.toLocaleString('en-ZA', { minimumFractionDigits: dec === undefined ? 0 : dec, maximumFractionDigits: dec === undefined ? 0 : dec }).replace(/ /g, ' ');
 }
 
-const api = { r2, n, sum, clone, deepMerge, getPack, tableTax, marginalRate, ageAtYearEnd, rebatesFor, thresholdFor, normalTax, emptyYear, emptyClient, aggregateIrp5, travelBand, travelClaim, cgtCalc, lumpSumTax, medicalCredits, compute, basicAmount, provisionalCalc, dueDates, fmt };
+const api = { companyCarCalc, taxByBracket, addBusinessDays, saHolidays, isBusinessDay, lastBusinessDayOnOrBefore, daysBetween, assessmentInterest, assessmentRecon, r2, n, sum, clone, deepMerge, getPack, tableTax, marginalRate, ageAtYearEnd, rebatesFor, thresholdFor, normalTax, emptyYear, emptyClient, aggregateIrp5, travelBand, travelClaim, cgtCalc, lumpSumTax, medicalCredits, compute, basicAmount, provisionalCalc, dueDates, fmt };
 if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.IntaxEngine = api;
 })(typeof window !== 'undefined' ? window : globalThis);

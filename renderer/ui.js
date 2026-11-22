@@ -10,7 +10,10 @@ const S = {
 };
 const DEFAULT_SETTINGS = {
   practice: { name: '', practitioner: '', prNumber: '', regBody: '', address: '', phone: '', email: '', website: '', logo: '', disclaimer: 'This computation is an estimate prepared for tax planning purposes from information supplied by the taxpayer. Final liability is determined by SARS on assessment.' },
-  lastClient: null, lastYear: 2027, interestRate: 10.5, codes: null, reportAccent: '#0b7a75'
+  lastClient: null, lastYear: 2027, interestRate: 10.5, codes: null, reportAccent: '#0b7a75',
+  billing: { vatRegistered: false, vatNumber: '', vatRate: 15, invoicePrefix: 'INV', nextInvoice: 1, defaultRate: 950, paymentTerms: 30, bankName: '', accountName: '', accountNumber: '', branchCode: '', engagementFee: '' },
+  security: { pinHash: '', lockMinutes: 0 },
+  defaultHome: 'practice'
 };
 
 // ---------- data access ----------
@@ -129,3 +132,55 @@ function confirmBox(msg, okLabel = 'OK') {
 }
 function addDays(iso, d) { const x = new Date(iso + 'T00:00:00'); x.setDate(x.getDate() + d); return x.toISOString().slice(0, 10); }
 function daysUntil(iso) { const t = new Date(); t.setHours(0, 0, 0, 0); return Math.round((new Date(iso + 'T00:00:00') - t) / 86400000); }
+
+// ---------- charts (pure SVG, print-safe) ----------
+const CHART_COLORS = ['#0b7a75', '#13305a', '#b7862b', '#5b8fd1', '#8a5cb8', '#c2410c', '#2f855a', '#7a8699'];
+function svgDonut(items, size = 170, opts = {}) {
+  const data = items.filter(d => d.value > 0);
+  const total = data.reduce((a, d) => a + d.value, 0);
+  if (!total) return `<div class="muted">No data</div>`;
+  const r = size / 2 - 6, ri = r * 0.62, cx = size / 2, cy = size / 2;
+  let a0 = -Math.PI / 2, paths = '';
+  data.forEach((d, i) => {
+    const frac = d.value / total, a1 = a0 + frac * Math.PI * 2;
+    const large = frac > 0.5 ? 1 : 0;
+    const p = (rad, ang) => `${(cx + rad * Math.cos(ang)).toFixed(2)},${(cy + rad * Math.sin(ang)).toFixed(2)}`;
+    if (frac >= 0.9999) paths += `<circle cx="${cx}" cy="${cy}" r="${(r + ri) / 2}" fill="none" stroke="${d.color || CHART_COLORS[i % 8]}" stroke-width="${r - ri}"/>`;
+    else paths += `<path d="M${p(r, a0)} A${r},${r} 0 ${large} 1 ${p(r, a1)} L${p(ri, a1)} A${ri},${ri} 0 ${large} 0 ${p(ri, a0)} Z" fill="${d.color || CHART_COLORS[i % 8]}"><title>${esc(d.label)}: ${E.fmt(d.value)}</title></path>`;
+    a0 = a1;
+  });
+  const legend = data.map((d, i) => `<div style="display:flex;gap:7px;align-items:center;margin:3px 0;font-size:12px"><span style="width:10px;height:10px;border-radius:2px;background:${d.color || CHART_COLORS[i % 8]};flex:none"></span><span style="flex:1">${esc(d.label)}</span><b style="font-variant-numeric:tabular-nums">${Math.round(d.value / total * 100)}%</b></div>`).join('');
+  return `<div style="display:flex;gap:18px;align-items:center"><svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${paths}<text x="${cx}" y="${cy - 2}" text-anchor="middle" font-size="11" fill="#7a8699">${esc(opts.center || 'Total')}</text><text x="${cx}" y="${cy + 15}" text-anchor="middle" font-size="14" font-weight="700" fill="#0d2340">R ${E.fmt(total / 1000)}k</text></svg><div style="flex:1;min-width:150px">${legend}</div></div>`;
+}
+function svgBars(cats, series, opts = {}) {
+  const W = opts.width || 520, H = opts.height || 200, padL = 56, padB = 26, padT = 10;
+  const max = Math.max(1, ...series.flatMap(s => s.values.map(v => Math.max(0, v))));
+  const nice = Math.pow(10, Math.floor(Math.log10(max))); const top = Math.ceil(max / nice) * nice;
+  const gw = (W - padL - 8) / cats.length, bw = Math.min(26, (gw - 10) / series.length);
+  let g = '';
+  for (let i = 0; i <= 4; i++) { const v = top * i / 4, yy = H - padB - (H - padB - padT) * i / 4; g += `<line x1="${padL}" x2="${W - 4}" y1="${yy}" y2="${yy}" stroke="#e6eaf0"/><text x="${padL - 6}" y="${yy + 4}" text-anchor="end" font-size="10" fill="#7a8699">${v >= 1e6 ? (v / 1e6).toFixed(1) + 'm' : Math.round(v / 1000) + 'k'}</text>`; }
+  cats.forEach((c, ci) => {
+    const x0 = padL + gw * ci + (gw - bw * series.length) / 2;
+    series.forEach((s, si) => { const v = Math.max(0, s.values[ci] || 0), h = (H - padB - padT) * v / top; g += `<rect x="${(x0 + si * bw).toFixed(1)}" y="${(H - padB - h).toFixed(1)}" width="${(bw - 2).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${s.color || CHART_COLORS[si]}"><title>${esc(s.name)} ${esc(c)}: ${E.fmt(v)}</title></rect>`; });
+    g += `<text x="${padL + gw * ci + gw / 2}" y="${H - 8}" text-anchor="middle" font-size="11" fill="#4a5568">${esc(c)}</text>`;
+  });
+  const legend = series.map((s, i) => `<span style="display:inline-flex;gap:6px;align-items:center;margin-right:14px;font-size:12px"><span style="width:10px;height:10px;border-radius:2px;background:${s.color || CHART_COLORS[i]}"></span>${esc(s.name)}</span>`).join('');
+  return `<svg width="100%" viewBox="0 0 ${W} ${H}" style="max-width:${W}px">${g}</svg><div>${legend}</div>`;
+}
+function svgBracketBar(brackets, opts = {}) {
+  const used = brackets.filter(b => b.amount > 0), total = used.reduce((a, b) => a + b.amount, 0);
+  if (!total) return '<div class="muted">No taxable income</div>';
+  const W = opts.width || 520; let x = 0;
+  const shades = ['#cfe8e6', '#9fd2ce', '#6fbab4', '#3f9f98', '#0b7a75', '#0a5f5b', '#0d2340'];
+  const parts = used.map((b, i) => { const w = W * b.amount / total; const s = `<rect x="${x.toFixed(1)}" y="0" width="${w.toFixed(1)}" height="30" fill="${shades[brackets.indexOf(b)]}"><title>${Math.round(b.rate * 100)}%: R ${E.fmt(b.amount)}</title></rect>${w > 34 ? `<text x="${(x + w / 2).toFixed(1)}" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="${brackets.indexOf(b) > 3 ? '#fff' : '#0d2340'}">${Math.round(b.rate * 100)}%</text>` : ''}`; x += w; return s; }).join('');
+  return `<svg width="100%" viewBox="0 0 ${W} 30" style="max-width:${W}px;border-radius:4px">${parts}</svg>`;
+}
+function incomeMix(r) {
+  return [
+    { label: 'Employment', value: r.employment }, { label: 'Business', value: r.businessNet }, { label: 'Rental', value: r.rentalNet },
+    { label: 'Interest & dividends', value: r.interest.local + r.interest.foreign + r.dividends.local + r.dividends.reit + r.dividends.foreign },
+    { label: 'Capital gains (taxable)', value: r.cgt.taxableGain }, { label: 'Foreign', value: r.foreignEmployment }, { label: 'Other', value: r.otherIncome + r.savingsWithdrawal }
+  ];
+}
+function toCsv(rows) { return rows.map(r => r.map(v => { const s = String(v ?? ''); return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }).join(',')).join('\r\n'); }
+async function sha256(text) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)); return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2, '0')).join(''); }

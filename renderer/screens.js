@@ -51,6 +51,7 @@ SCREENS.dashboard = () => {
   const c = cur(), y = yd(), r = result(), pv = r.provisional, P = pack();
   const bal = r.balance;
   const pStatus = (due, paid, date) => {
+    if (due < 1 && !paid) return '<span class="pill ok">Nothing due</span>';
     if (paid > 0 && paid >= due - 1) return '<span class="pill ok">Paid</span>';
     if (paid > 0) return '<span class="pill warn">Part paid</span>';
     const d = daysUntil(date);
@@ -82,7 +83,7 @@ SCREENS.dashboard = () => {
     <div class="card"><div class="card-head"><h2>Income by source</h2></div>
       <table class="t"><tbody>${income.map(i => `<tr class="clickable" data-go="${i[2]}"><td>${i[0]}</td><td class="r">${moneyCell(i[1])}</td></tr>`).join('') || '<tr><td class="muted">No income captured yet – use the checklist or a wizard.</td></tr>'}
       <tr class="sub"><td>Gross income (after exemptions)</td><td class="r">${moneyCell(r.incomeTotal + r.cgt.taxableGain)}</td></tr>
-      <tr><td>Less deductions</td><td class="r">${moneyCell(-(r.travel.chosen + r.homeOffice + r.otherDeductions + r.assessedLossBF + r.ra.allowed + r.donations.allowed))}</td></tr>
+      <tr><td>Less deductions</td><td class="r">${moneyCell(-(r.totalDeductions))}</td></tr>
       <tr class="total"><td>Taxable income</td><td class="r">${moneyCell(r.taxableIncome)}</td></tr></tbody></table>
     </div>
   </div>
@@ -344,9 +345,9 @@ SCREENS.final = () => {
   const groups = {}; r.lines.forEach(l => (groups[l.section] = groups[l.section] || []).push(l));
   return head('ITR12 & expected assessment', 'Full income tax computation and the figures to capture on the ITR12.', wizBtn('final', 'ITR12 wizard') + `<button class="btn" data-report="itr12">ITR12 schedule</button><button class="btn btn-primary" data-report="computation">Computation PDF</button>`) +
   `<div class="grid g2"><div class="card"><h2>Income tax computation</h2><table class="t"><tbody>
-    ${Object.entries(groups).map(([g, ls]) => `<tr class="sub"><td colspan="2">${esc(g)}</td><td></td></tr>` + ls.map(l => `<tr><td>${l.code ? `<span class="code-tag">${l.code}</span> ` : ''}${esc(l.label)}</td><td class="r">${moneyCell(l.amount)}</td><td></td></tr>`).join('')).join('')}
+    ${Object.entries(groups).map(([g, ls]) => `<tr class="sub"><td colspan="2">${esc(g)}</td><td></td></tr>` + ls.map(l => l.kind === 'note' ? `<tr><td colspan="3" class="muted"><i>${esc(l.label)}</i></td></tr>` : `<tr><td>${l.code ? `<span class="code-tag">${l.code}</span> ` : ''}${esc(l.label)}</td><td class="r">${moneyCell(l.amount)}</td><td></td></tr>`).join('')).join('')}
     <tr class="total"><td>Taxable income</td><td class="r">${moneyCell(r.taxableIncome)}</td><td></td></tr></tbody></table></div>
-  <div class="card"><h2>Tax</h2>${line('Tax on taxable income', money(r.grossTax))}${line('Less rebates', money(-r.rebates))}${line('Less medical scheme fees credit', money(-r.medical.mtcUsed))}${line('Less additional medical credit', money(-r.medical.additionalUsed))}${line('Less foreign tax credit', money(-r.foreignTaxCredit))}${line('Normal tax', money(r.normalTax), 'total')}${line('Tax on lump sums', money(r.lump.total))}${line('Total liability', money(r.liability), 'total')}${line('Less PAYE', money(-r.paye))}${line('Less tax deducted on lump sums', money(-r.lump.taxDeducted))}${line('Less provisional tax paid', money(-r.provisionalPaid))}${line(r.balance > 0 ? 'Payable to SARS' : 'Refund due', money(Math.abs(r.balance)), 'total')}
+  <div class="card"><h2>Tax</h2>${line('Tax on taxable income', money(r.grossTax))}${line('Less rebates', money(-r.rebates))}${line('Less medical scheme fees credit', money(-r.medical.mtcUsed))}${line('Less additional medical credit', money(-r.medical.additionalUsed))}${line('Less foreign tax credit', money(-r.foreignTaxCredit))}${line('Normal tax', money(r.normalTax), 'total')}${line('Tax on lump sums', money(r.lump.total))}${r.tfsa && r.tfsa.tax ? line('Tax on excess TFSA contributions (40%)', money(r.tfsa.tax)) : ''}${line('Total liability', money(r.liability), 'total')}${line('Less PAYE', money(-r.paye))}${line('Less tax deducted on lump sums', money(-r.lump.taxDeducted))}${line('Less provisional tax paid', money(-r.provisionalPaid))}${line(r.balance > 0 ? 'Payable to SARS' : 'Refund due', money(Math.abs(r.balance)), 'total')}
   <h3>Carried forward</h3>${line('Retirement contributions', money(r.ra.carryForward))}${line('Donations', money(r.donations.carryForward))}${line('Assessed loss', money(r.assessedLossCF))}${line('Capital loss', money(r.cgt.lossCF))}</div></div>`;
 };
 

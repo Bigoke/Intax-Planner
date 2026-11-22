@@ -59,9 +59,9 @@ function doc(title, body) {
 function computationBody(c, r, P) {
   const groups = {}; r.lines.forEach(l => (groups[l.section] = groups[l.section] || []).push(l));
   let rows = '';
-  Object.entries(groups).forEach(([g, ls]) => { rows += sect(g); ls.forEach(l => { rows += tr(l.label, l.amount, '', l.code); }); });
+  Object.entries(groups).forEach(([g, ls]) => { rows += sect(g); ls.forEach(l => { rows += l.kind === 'note' ? `<tr><td colspan="2" class="muted"><i>${esc(l.label)}</i></td></tr>` : tr(l.label, l.amount, '', l.code); }); });
   rows += tr('Taxable income', r.taxableIncome, 'tot');
-  const tax = [tr('Normal tax on taxable income per tax table', r.grossTax), tr(`Less: rebates (${r.age !== null && r.age >= 75 ? 'primary, secondary, tertiary' : r.age !== null && r.age >= 65 ? 'primary, secondary' : 'primary'})`, -r.rebates), tr('Less: medical scheme fees tax credit (s6A)', -r.medical.mtcUsed), tr('Less: additional medical expenses tax credit (s6B)', -r.medical.additionalUsed), tr('Less: foreign tax credit (s6quat)', -r.foreignTaxCredit), tr('Normal tax payable', r.normalTax, 'sub'), tr('Tax on retirement lump sums (separate tables)', r.lump.total), tr('Total tax liability', r.liability, 'sub'), tr('Less: employees’ tax (PAYE)', -r.paye, '', '4102'), tr('Less: tax deducted on lump sums', -r.lump.taxDeducted, '', '4115'), tr('Less: provisional tax paid (IRP6)', -r.provisionalPaid), tr(r.balance > 0 ? 'Amount payable to SARS' : 'Amount refundable by SARS', Math.abs(r.balance), 'tot')].join('');
+  const tax = [tr('Normal tax on taxable income per tax table', r.grossTax), tr(`Less: rebates (${r.age !== null && r.age >= 75 ? 'primary, secondary, tertiary' : r.age !== null && r.age >= 65 ? 'primary, secondary' : 'primary'})`, -r.rebates), tr('Less: medical scheme fees tax credit (s6A)', -r.medical.mtcUsed), tr('Less: additional medical expenses tax credit (s6B)', -r.medical.additionalUsed), tr('Less: foreign tax credit (s6quat)', -r.foreignTaxCredit), tr('Normal tax payable', r.normalTax, 'sub'), tr('Tax on retirement lump sums (separate tables)', r.lump.total), (r.tfsa && r.tfsa.tax ? tr('Tax on excess tax-free savings contributions (40%)', r.tfsa.tax) : ''), tr('Total tax liability', r.liability, 'sub'), tr('Less: employees’ tax (PAYE)', -r.paye, '', '4102'), tr('Less: tax deducted on lump sums', -r.lump.taxDeducted, '', '4115'), tr('Less: provisional tax paid (IRP6)', -r.provisionalPaid), tr(r.balance > 0 ? 'Amount payable to SARS' : 'Amount refundable by SARS', Math.abs(r.balance), 'tot')].join('');
   return titleBlock('Income Tax Computation', 'Individual · Section 5 of the Income Tax Act', c, P) +
   `<div class="kp"><div><b>Taxable income</b><span>R ${E.fmt(r.taxableIncome)}</span></div><div><b>Tax liability</b><span>R ${E.fmt(r.liability)}</span></div><div><b>Effective rate</b><span>${r.effectiveRate}%</span></div><div><b>${r.balance > 0 ? 'Payable' : 'Refund'}</b><span>R ${E.fmt(Math.abs(r.balance))}</span></div></div>
   <h2>Taxable income</h2><table><tr><th>Description</th><th class="r">R</th></tr>${rows}</table>
@@ -124,8 +124,9 @@ function summaryBody(c, r, P, y) {
   return titleBlock('Tax Planning Summary', `Prepared for ${esc(clientName(c))}`, c, P) +
   `<p>Dear ${esc(c.firstName || clientName(c))},</p><p>Below is a summary of your estimated income tax position for the ${esc(P.label)} tax year, based on the information you provided. The detailed computation and supporting schedules are attached.</p>
   <div class="kp"><div><b>Taxable income</b><span>R ${E.fmt(r.taxableIncome)}</span></div><div><b>Tax for the year</b><span>R ${E.fmt(r.liability)}</span></div><div><b>Already paid</b><span>R ${E.fmt(r.credits)}</span></div><div><b>${r.balance > 0 ? 'Still payable' : 'Expected refund'}</b><span>R ${E.fmt(Math.abs(r.balance))}</span></div></div>
+  <h2>Where your income comes from</h2>${svgDonut(incomeMix(r), 150, { center: 'Income' })}
   ${y.flags.provisional ? `<h2>Payment schedule</h2><table><tr><th>Payment</th><th>Due date</th><th class="r">Amount (R)</th></tr><tr><td>1st provisional payment</td><td>${dateLong(pv.dueDates.p1)}</td><td class="r">${m2(pv.p1.due)}</td></tr><tr><td>2nd provisional payment</td><td>${dateLong(pv.dueDates.p2)}</td><td class="r">${m2(pv.p2.due)}</td></tr><tr><td>3rd top-up payment (if required)</td><td>${dateLong(pv.p3.dueDate)}</td><td class="r">${m2(pv.p3.due)}</td></tr></table>` : ''}
-  <h2>Income summary</h2><table>${tr('Employment income', r.employment)}${r.businessNet ? tr('Business / trade', r.businessNet) : ''}${r.rentalNet ? tr('Rental', r.rentalNet) : ''}${r.investNet ? tr('Interest & dividends (taxable)', r.investNet) : ''}${r.cgt.taxableGain ? tr('Taxable capital gain', r.cgt.taxableGain) : ''}${r.otherIncome + r.savingsWithdrawal ? tr('Other income', r.otherIncome + r.savingsWithdrawal) : ''}${tr('Total deductions', -(r.travel.chosen + r.homeOffice + r.otherDeductions + r.assessedLossBF + r.ra.allowed + r.donations.allowed))}${tr('Taxable income', r.taxableIncome, 'tot')}</table>
+  <h2>Income summary</h2><table>${tr('Employment income', r.employment)}${r.businessNet ? tr('Business / trade', r.businessNet) : ''}${r.rentalNet ? tr('Rental', r.rentalNet) : ''}${r.investNet ? tr('Interest & dividends (taxable)', r.investNet) : ''}${r.cgt.taxableGain ? tr('Taxable capital gain', r.cgt.taxableGain) : ''}${r.otherIncome + r.savingsWithdrawal ? tr('Other income', r.otherIncome + r.savingsWithdrawal) : ''}${tr('Total deductions', -(r.totalDeductions))}${tr('Taxable income', r.taxableIncome, 'tot')}</table>
   ${tips.length ? `<h2>Recommendations & points to note</h2><ul>${tips.map(w => `<li>${esc(w.text)}</li>`).join('')}</ul>` : ''}
   <p>Please let us know if any of your circumstances change during the year so that we can update the estimates.</p><p>Kind regards,<br><br><b>${esc(S.settings.practice.practitioner || '')}</b><br>${esc(S.settings.practice.name || '')}</p>`;
 }
@@ -144,7 +145,7 @@ function multiYearBody(c) {
   const yrs = Object.keys(c.years).map(Number).sort();
   const rs = yrs.map(yr => E.compute(c, c.years[yr], pack(yr), codeList()));
   const row = (l, f) => `<tr><td>${l}</td>${rs.map(r => `<td class="r">${m2(f(r))}</td>`).join('')}</tr>`;
-  return titleBlock('Multi-year Comparison', `${yrs[0] || ''} – ${yrs[yrs.length - 1] || ''}`, c, null) +
+  return titleBlock('Multi-year Comparison', `${yrs[0] || ''} – ${yrs[yrs.length - 1] || ''}`, c, null) + `<div style="margin:6px 0 14px">${svgBars(yrs.map(String), [{ name: 'Taxable income', values: rs.map(r => r.taxableIncome) }, { name: 'Tax liability', values: rs.map(r => r.liability) }, { name: 'PAYE + provisional paid', values: rs.map(r => r.credits) }], { width: 640, height: 210 })}</div>` +
   `<table><tr><th>R</th>${yrs.map(y => `<th class="r">${y}</th>`).join('')}</tr>${row('Employment income', r => r.employment)}${row('Business', r => r.businessNet)}${row('Rental', r => r.rentalNet)}${row('Investments (taxable)', r => r.investNet)}${row('Taxable capital gain', r => r.cgt.taxableGain)}${row('Retirement deduction', r => -r.ra.allowed)}${row('Taxable income', r => r.taxableIncome)}${row('Normal tax', r => r.normalTax)}${row('PAYE', r => r.paye)}${row('Provisional paid', r => r.provisionalPaid)}${row('Balance (payable / (refund))', r => r.balance)}${row('Effective rate %', r => r.effectiveRate)}</table>`;
 }
 function whatifBody(c, P) {
@@ -167,20 +168,22 @@ function tablesBody() {
 }
 
 const LIST = [
-  { id: 'computation', title: 'Income tax computation', desc: 'Full computation from income to tax payable or refund, with source codes.', client: true },
-  { id: 'summary', title: 'Tax planning summary (client letter)', desc: 'Client-facing summary, payment schedule and recommendations.', client: true },
-  { id: 'itr12', title: 'ITR12 preparation schedule', desc: 'Every IRP5 code and ITR12 section figure ready for eFiling capture.', client: true },
-  { id: 'p1', title: 'IRP6 – first period worksheet', desc: 'August provisional payment calculation.', client: true },
-  { id: 'p2', title: 'IRP6 – second period worksheet', desc: 'February payment with the underestimation penalty test.', client: true },
-  { id: 'p3', title: 'Third (top-up) payment worksheet', desc: 'Top-up required to avoid interest.', client: true },
-  { id: 'schedules', title: 'Supporting schedules', desc: 'Business, rental, capital gains, travel, medical, retirement and lump sums.', client: true },
-  { id: 'multiyear', title: 'Multi-year comparison', desc: 'All captured tax years side by side.', client: true },
-  { id: 'whatif', title: 'What-if scenario', desc: 'Planning scenario comparison from the What-if planner.', client: true },
-  { id: 'register', title: 'Client register', desc: 'All clients with status and balances for the selected year.' },
-  { id: 'tables', title: 'Tax tables', desc: 'Rates, rebates, thresholds and travel table for the year.' }
+  { id: 'computation', cat: 'Client reports', title: 'Income tax computation', desc: 'Full computation from income to tax payable or refund, with source codes.', client: true },
+  { id: 'summary', cat: 'Client reports', title: 'Tax planning summary (client letter)', desc: 'Client-facing summary, payment schedule and recommendations.', client: true },
+  { id: 'itr12', cat: 'Client reports', title: 'ITR12 preparation schedule', desc: 'Every IRP5 code and ITR12 section figure ready for eFiling capture.', client: true },
+  { id: 'p1', cat: 'Provisional tax', title: 'IRP6 – first period worksheet', desc: 'August provisional payment calculation.', client: true },
+  { id: 'p2', cat: 'Provisional tax', title: 'IRP6 – second period worksheet', desc: 'February payment with the underestimation penalty test.', client: true },
+  { id: 'p3', cat: 'Provisional tax', title: 'Third (top-up) payment worksheet', desc: 'Top-up required to avoid interest.', client: true },
+  { id: 'schedules', cat: 'Client reports', title: 'Supporting schedules', desc: 'Business, rental, capital gains, travel, medical, retirement and lump sums.', client: true },
+  { id: 'multiyear', cat: 'Client reports', title: 'Multi-year comparison', desc: 'All captured tax years side by side.', client: true },
+  { id: 'whatif', cat: 'Planning', title: 'What-if scenario', desc: 'Planning scenario comparison from the What-if planner.', client: true },
+  { id: 'register', cat: 'Practice', title: 'Client register', desc: 'All clients with status and balances for the selected year.' },
+  { id: 'tables', cat: 'Practice', title: 'Tax tables', desc: 'Rates, rebates, thresholds and travel table for the year.' }
 ];
 
-function build(id) {
+const EXTRA = {};
+function build(id, arg) {
+  if (EXTRA[id]) return EXTRA[id](arg);
   const c = cur(), P = pack();
   const def = LIST.find(x => x.id === id) || { id: 'pack', title: 'Client pack', client: true };
   if (def.client && !c) throw new Error('Select a client first.');
@@ -201,6 +204,7 @@ function build(id) {
     case 'pack': {
       const parts = [summaryBody(c, r, P, y), computationBody(c, r, P), schedulesBody(c, r, P, y), itr12Body(c, r, P, y)];
       if (y.flags.provisional) parts.push(p1Body(c, r, P), p2Body(c, r, P), p3Body(c, r, P));
+      if (window.REPORTS && REPORTS.packExtra) parts.push(...REPORTS.packExtra(c, r, P, y));
       body = parts.map((p, i) => `<div class="${i ? 'pb' : ''}">${letterhead()}${p}${footer()}</div>`).join('');
       return { title: def.title, html: doc('Client pack', body) };
     }
@@ -210,14 +214,14 @@ function build(id) {
 }
 function fileName(title) { const c = cur(); return `${title} - ${c ? clientName(c) + ' - ' : ''}${S.year}.pdf`.replace(/[\\/:*?"<>|]/g, ''); }
 
-function preview(id) {
-  let rep; try { rep = build(id); } catch (e) { toast(e.message); return; }
+function preview(id, arg) {
+  let rep; try { rep = build(id, arg); } catch (e) { toast(e.message); return; }
   const m = modal({ title: rep.title, wide: true, body: '<iframe class="preview"></iframe>', foot: `<span class="muted" style="margin-right:auto">A4 · ${esc(S.settings.practice.name || 'Set your practice details in Practice settings')}</span><button class="btn" id="rpPrint">Print…</button><button class="btn btn-primary" id="rpPdf">Save PDF</button>` });
   m.body.style.padding = '10px';
   m.el.querySelector('iframe').srcdoc = rep.html.replace('<body>', '<body style="background:#e9edf2"><div style="background:#fff;max-width:210mm;margin:12px auto;padding:14mm 13mm;box-shadow:0 2px 10px rgba(0,0,0,.15)">').replace('</body>', '</div></body>');
-  m.el.querySelector('#rpPdf').onclick = async () => { const p = await window.intax.pdf(rep.html, fileName(rep.title)); if (p) toast('Saved ' + p); };
+  m.el.querySelector('#rpPdf').onclick = async () => { const p = await window.intax.pdf(rep.html, rep.fileName || fileName(rep.title)); if (p) toast('Saved ' + p); };
   m.el.querySelector('#rpPrint').onclick = () => window.intax.print(rep.html);
 }
 
-window.REPORTS = { list: () => LIST, build, preview, fileName };
+window.REPORTS = { list: () => LIST, build, preview, fileName, EXTRA, LIST, h: { css, letterhead, titleBlock, footer, doc, tr, sect, m2, computationBody, summaryBody, schedulesBody, itr12Body, p1Body, p2Body, p3Body } };
 })();

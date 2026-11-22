@@ -101,5 +101,45 @@ eq('donation cf', r.donations.carryForward, 20000);
 y = year(2027, d => { d.provisional.basicAmount = { lastAssessedYear: 2025, lastAssessedTI: 500000, lessCapitalGain: 0, lessLumpSums: 0 }; });
 eq('basic amount +16%', E.basicAmount(y, P(2027)).amount, 580000);
 
+// 12. Married in community of property – half of interest, rental, CGT
+y = year(2027, d => { d.investments.localInterest = 60000; d.rental = [{ property: 'Flat', rent: 120000, sharePct: 100, expenses: [{ desc: 'Rates', amount: 20000 }] }]; d.cgt.items = [{ desc: 'Shares', type: 'shares', proceeds: 300000, baseCost: 100000 }]; });
+const cop = Object.assign(client(), { maritalStatus: 'Married in community of property' });
+r = E.compute(cop, y, P(2027), CODES);
+eq('cop interest', r.interest.local - r.interest.exempt, 30000 - 23800);
+eq('cop rental', r.rentalNet, 50000);
+eq('cop cgt', r.cgt.taxableGain, (100000 - 50000) * 0.4);
+y.cop = false; eq('cop override off', E.compute(cop, y, P(2027), CODES).rentalNet, 100000);
+
+// 13. Company car reduction
+y = year(2027, d => { d.irp5 = irp({ 3601: 500000, 3802: 168000 }); d.companyCar = { enabled: true, determinedValue: 400000, maintenancePlan: false, months: 12, totalKm: 30000, businessKm: 12000, fuelBorne: true, maintBorne: false, insurance: 0, licence: 0 }; });
+r = E.compute(client(), y, P(2027), CODES);
+eq('car calc value', r.companyCar.calculated, 168000);
+eq('car reduction', r.companyCar.reduction, 67200 + 18000 * 1.734, 0.01);
+eq('car TI', r.taxableIncome, 668000 - r.companyCar.reduction);
+
+// 14. TFSA excess
+y = year(2027, d => { d.tfsa = { contributions: 56000, priorTotal: 100000 }; });
+r = E.compute(client(), y, P(2027), CODES);
+eq('tfsa tax', r.tfsa.tax, 4000);
+y.tfsa = { contributions: 40000, priorTotal: 480000 };
+eq('tfsa lifetime', E.compute(client(), y, P(2027), CODES).tfsa.tax, 20000 * 0.4);
+
+// 15. Business days and due dates
+eq('Good Friday 2027 not business day', E.isBusinessDay(new Date('2027-03-26T00:00:00Z')) ? 1 : 0, 0);
+eq('skip 16 Dec', E.addBusinessDays('2026-12-14', 3) === '2026-12-18' ? 1 : 0, 1);
+eq('P2 due 2027 moves to Friday', E.dueDates(P(2027)).p2 === '2027-02-26' ? 1 : 0, 1);
+eq('Christmas 2027 Sat, 26 Sun -> Mon 27 holiday', E.isBusinessDay(new Date('2027-12-27T00:00:00Z')) ? 1 : 0, 0);
+
+// 16. Bracket analysis adds up
+y = year(2027, d => { d.irp5 = irp({ 3601: 1234567 }); });
+r = E.compute(client(), y, P(2027), CODES);
+eq('brackets sum', r.brackets.reduce((a, b) => a + b.tax, 0), r.grossTax, 0.05);
+
+// 17. Assessment recon + objection deadline
+y.assessment = { date: '2026-11-02', taxableIncome: 1240000, normalTax: null, paye: null, provisional: null, balance: null };
+r = E.compute(client(), y, P(2027), CODES);
+eq('recon diff', r.recon.rows[0].diff, 1240000 - 1234567);
+eq('objection deadline set', r.recon.objectionDeadline > '2027-02-01' ? 1 : 0, 1);
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

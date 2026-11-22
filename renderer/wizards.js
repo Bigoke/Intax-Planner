@@ -27,11 +27,11 @@ WIZ.newclient = {
 WIZ.checklist = {
   title: 'Guided set-up', desc: 'Answer a few questions; the right wizards follow automatically.',
   steps: [
-    { title: 'What income did the taxpayer receive?', intro: 'Click every source that applies for ' + '<b>the selected tax year</b>.', html: () => tilesHtml(['employment', 'business', 'rental', 'investments', 'cgt', 'lumpSums', 'foreign', 'other']) },
+    { title: 'What income did the taxpayer receive?', intro: 'Click every source that applies for ' + '<b>the selected tax year</b>.', html: () => tilesHtml(['employment', 'companyCar', 'business', 'rental', 'investments', 'cgt', 'lumpSums', 'foreign', 'other']) },
     { title: 'Which deductions and credits apply?', intro: 'Deduction finder: tick everything the taxpayer paid or received.', html: () => tilesHtml(['retirement', 'medical', 'travel', 'donations', 'homeOffice', 'provisional']) + `<div class="alert tip" style="margin-top:14px">💡 Commonly missed: retirement annuity certificates (IT3(f)), out-of-pocket medical costs, the travel logbook, s18A donation receipts and home office costs for commission earners.</div>` },
     { title: 'Ready', intro: 'The following wizards will run next. You can skip any of them.', html: () => { const q = WIZ.checklist.queue(); return q.length ? `<ol>${q.map(k => `<li>${WIZ[k].title}</li>`).join('')}</ol>` : '<p>No sections selected.</p>'; } }
   ],
-  queue() { const y = yd(); const map = { employment: 'irp5', business: 'business', rental: 'rental', investments: 'investments', cgt: 'cgt', lumpSums: 'lumps', retirement: 'retirement', medical: 'medical', travel: 'travel', donations: 'donations', provisional: 'p1' }; return Object.keys(map).filter(k => y.flags[k]).map(k => map[k]); },
+  queue() { const y = yd(); const map = { employment: 'irp5', companyCar: 'companycar', business: 'business', rental: 'rental', investments: 'investments', cgt: 'cgt', lumpSums: 'lumps', retirement: 'retirement', medical: 'medical', travel: 'travel', donations: 'donations', provisional: 'p1' }; return Object.keys(map).filter(k => y.flags[k]).map(k => map[k]); },
   finish() { Wizard.queue = WIZ.checklist.queue(); return 'dashboard'; }
 };
 function tilesHtml(keys) {
@@ -143,6 +143,16 @@ WIZ.travel = {
   finish() { yd().flags.travel = true; return 'travel'; }
 };
 
+WIZ.companycar = {
+  title: 'Company car benefit', desc: 'Reduce the 3802 fringe benefit with a logbook.',
+  steps: [
+    { title: 'The vehicle', intro: 'The determined value is the employer\u2019s cost of the car including VAT, excluding finance charges.', html: () => { yd().companyCar.enabled = true; return `<div class="grid g2">${f({ p: 'y.companyCar.determinedValue', label: 'Determined value', type: 'money' })}${f({ p: 'y.companyCar.months', label: 'Months available', type: 'int' })}${f({ p: 'y.companyCar.maintenancePlan', label: 'Sold with a maintenance plan', type: 'check' })}</div>`; } },
+    { title: 'Logbook', html: () => `<div class="grid g2">${f({ p: 'y.companyCar.totalKm', label: 'Total kilometres', type: 'int' })}${f({ p: 'y.companyCar.businessKm', label: 'Business kilometres', type: 'int' })}${f({ p: 'y.companyCar.fuelBorne', label: 'I paid all private fuel', type: 'check' })}${f({ p: 'y.companyCar.maintBorne', label: 'I paid all private maintenance', type: 'check' })}${f({ p: 'y.companyCar.insurance', label: 'Insurance paid personally', type: 'money' })}${f({ p: 'y.companyCar.licence', label: 'Licence paid personally', type: 'money' })}</div>` },
+    { title: 'Result', html: () => { const c = result().companyCar; return sumLine('Fringe benefit value', money(c.value)) + sumLine('Reduction on assessment', money(-c.reduction)) + sumLine('Taxable benefit', money(c.value - c.reduction), 'total'); } }
+  ],
+  finish() { yd().flags.companyCar = true; return 'companycar'; }
+};
+
 WIZ.donations = {
   title: 'Donations', desc: 'Section 18A donations.',
   steps: [{ title: 'Donations with s18A receipts', html: () => f({ p: 'y.deductions.donations', label: 'Total donations', type: 'money' }) + '<br>' + f({ p: 'y.deductions.donationsCarryForward', label: 'Carried forward from last year', type: 'money' }) }],
@@ -210,7 +220,7 @@ const Wizard = {
     render();
   },
   menu() {
-    const list = ['newclient', 'checklist', 'irp5', 'business', 'rental', 'investments', 'cgt', 'lumps', 'retirement', 'medical', 'travel', 'donations', 'p1', 'p2', 'final'];
+    const list = ['newclient', 'checklist', 'irp5', 'companycar', 'business', 'rental', 'investments', 'cgt', 'lumps', 'retirement', 'medical', 'travel', 'donations', 'p1', 'p2', 'final'];
     const m = modal({ title: '✦ Wizards', body: `<p class="wiz-intro">Guided, step-by-step capture. Each wizard explains what to enter and shows the tax effect before you finish.</p><div class="wiz-list">${list.map(k => `<div class="wiz-card" data-wiz="${k}"><b>${WIZ[k].title}</b><span>${WIZ[k].desc || ''}</span></div>`).join('')}</div>` });
     m.body.addEventListener('click', e => { const c = e.target.closest('[data-wiz]'); if (c) { m.el.remove(); Wizard.queue = []; Wizard.open(c.dataset.wiz); } });
   }

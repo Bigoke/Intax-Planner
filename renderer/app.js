@@ -10,14 +10,32 @@ const App = {
     S.clientId = S.clients.some(c => c.id === S.settings.lastClient) ? S.settings.lastClient : (S.clients[0] || {}).id || null;
     document.getElementById('yearSelect').innerHTML = YEARS.slice().reverse().map(y => `<option value="${y}">${y} · ${PACKS[y].label.split(' ')[0]}</option>`).join('');
     App.bind();
-    App.route(S.clientId ? 'dashboard' : 'clients');
+    App.route(S.settings.defaultHome === 'client' && S.clientId ? 'dashboard' : 'practice');
     if (!S.clients.length) setTimeout(() => App.welcome(), 300);
+    if (S.settings.security.pinHash) App.lockScreen();
+    App.idleWatch();
   },
 
   welcome() {
     const m = modal({ title: 'Welcome to Intax Planner', body: `<p class="wiz-intro">Plan individual income tax for your clients: provisional tax (IRP6) for August, February and the September top-up, and the final ITR12 – for the 2020 to 2027 tax years.</p><ol class="help-article"><li>Add your <b>practice details and logo</b> – they print on every report.</li><li>Create your first <b>client</b> with the client wizard.</li><li>Run the <b>guided set-up</b> to capture income and deductions.</li></ol>`, foot: `<button class="btn" id="wSet">Practice settings</button><button class="btn btn-primary" id="wNew">Create first client</button>` });
     m.el.querySelector('#wSet').onclick = () => { m.close(); App.go('settings'); };
     m.el.querySelector('#wNew').onclick = () => { m.close(); Wizard.open('newclient'); };
+  },
+
+  async lockScreen() {
+    if (!S.settings.security.pinHash) { toast('Set a PIN in Practice settings first.'); return; }
+    const el = document.createElement('div');
+    el.className = 'lock-screen';
+    el.innerHTML = `<div class="lock-box"><div class="brand-mark" style="width:54px;height:54px;font-size:20px;margin:0 auto 12px">IT</div><h2>Intax Planner is locked</h2><p class="muted">${esc(S.settings.practice.name || '')}</p><input type="password" id="pinIn" placeholder="Enter PIN" autocomplete="off" style="text-align:center;font-size:18px;letter-spacing:6px"><div id="pinErr" class="muted" style="height:18px;margin-top:6px"></div><button class="btn btn-primary" id="pinGo" style="width:100%">Unlock</button></div>`;
+    document.body.appendChild(el);
+    const inp = el.querySelector('#pinIn'); inp.focus();
+    const go = async () => { if (await sha256('intax:' + inp.value) === S.settings.security.pinHash) el.remove(); else { el.querySelector('#pinErr').textContent = 'Incorrect PIN'; inp.value = ''; inp.focus(); } };
+    el.querySelector('#pinGo').onclick = go; inp.onkeydown = e => { if (e.key === 'Enter') go(); };
+  },
+  idleWatch() {
+    let last = Date.now();
+    ['mousemove', 'keydown', 'click'].forEach(ev => document.addEventListener(ev, () => { last = Date.now(); }, true));
+    setInterval(() => { const m = E.n(S.settings.security.lockMinutes); if (m && S.settings.security.pinHash && Date.now() - last > m * 60000 && !document.querySelector('.lock-screen')) App.lockScreen(); }, 15000);
   },
 
   afterClientChange() { S.settings.lastClient = S.clientId; S.settings.lastYear = S.year; markDirty(); App.renderChrome(); },
@@ -42,7 +60,7 @@ const App = {
     const pv = r.provisional, y = yd();
     el.innerHTML = `<div class="sum-title">Live tax position · ${S.year}</div>
       <div class="sum-row"><span>Gross income</span><span>${money0(r.incomeTotal + r.cgt.taxableGain)}</span></div>
-      <div class="sum-row"><span>Deductions</span><span>${money0(-(r.travel.chosen + r.homeOffice + r.otherDeductions + r.assessedLossBF + r.ra.allowed + r.donations.allowed))}</span></div>
+      <div class="sum-row"><span>Deductions</span><span>${money0(-(r.totalDeductions))}</span></div>
       <div class="sum-row"><span><b>Taxable income</b></span><span><b>${money0(r.taxableIncome)}</b></span></div>
       <div class="sum-row"><span>Tax before credits</span><span>${money0(r.grossTax - r.rebates)}</span></div>
       <div class="sum-row"><span>Medical credits</span><span>${money0(-(r.medical.mtcUsed + r.medical.additionalUsed))}</span></div>
@@ -66,6 +84,12 @@ const App = {
     const el = document.getElementById('content');
     try { el.innerHTML = SCREENS[r] ? SCREENS[r]() : '<p>Not found</p>'; }
     catch (e) { console.error(e); el.innerHTML = `<div class="alert bad">Error showing this screen: ${esc(e.message)}</div>`; }
+    const y = cur() ? yd(false) : null;
+    if (y && y.locked && NEEDS_CLIENT.has(r) && !UNLOCKED_SCREENS.has(r)) {
+      el.querySelectorAll('input,select,textarea').forEach(i => { if (!i.closest('[data-allow]')) i.disabled = true; });
+      el.querySelectorAll('[data-act="add"],[data-act="del"],[data-act="addcode"],[data-act="addexp"],[data-wizard]').forEach(b => b.disabled = true);
+      el.insertAdjacentHTML('afterbegin', `<div class="alert info" style="margin-bottom:14px">🔒 The ${S.year} tax year is locked (status: ${esc(y.status || 'Submitted')}). <button class="btn-link go" data-act="unlockyear">Unlock to edit</button></div>`);
+    }
     if (!opts || !opts.keepScroll) el.scrollTop = 0;
     App.renderChrome();
   },
@@ -102,15 +126,36 @@ const App = {
       else { v = parseNum(el.value); if (el.dataset.num === 'pct') v = v / 100; if (el.dataset.num === 'int') v = Math.round(v); }
     } else v = el.value;
     if (el.tagName === 'SELECT' && el.dataset.num) v = Number(v);
+    if (el.dataset.tri) v = v === 'yes' ? true : v === 'no' ? false : null;
     if (p.startsWith('x.')) { // tax table override
       const [, yr, ...rest] = p.split('.');
       if (!S.overrides[yr]) S.overrides[yr] = E.clone(pack(Number(yr)));
       let o = S.overrides[yr]; for (let i = 0; i < rest.length - 1; i++) o = o[rest[i]];
       o[rest[rest.length - 1]] = v; markDirty(); return;
     }
+    const before = getP(p);
     setP(p, v);
+    if ((p.startsWith('y.') || p.startsWith('c.')) && before !== v && cur()) App.log(p, before, v);
     if (p === 'y.flags.provisional' || p.startsWith('s.')) App.renderChrome();
     markDirty();
+  },
+
+  // Change log (audit trail) per client; consecutive edits of one field within a minute are merged.
+  log(p, from, to) {
+    const c = cur(); if (!c) return;
+    c.log = c.log || [];
+    const now = new Date().toISOString(), last = c.log[c.log.length - 1];
+    const label = App.fieldLabel(p);
+    if (last && last.p === p && last.year === S.year && (Date.parse(now) - Date.parse(last.t)) < 60000) { last.to = to; last.t = now; }
+    else c.log.push({ t: now, year: p.startsWith('y.') ? S.year : null, p, label, from: from === undefined ? '' : from, to, user: S.settings.practice.practitioner || '' });
+    if (c.log.length > 3000) c.log.splice(0, c.log.length - 3000);
+  },
+  fieldLabel(p) {
+    const n = document.querySelector(`[data-field="${CSS.escape(p)}"] label`);
+    if (n) return n.textContent.trim();
+    const m = p.match(/irp5\.(\d+)\.codes\.(\d+)\.(\w+)/);
+    if (m) { const cert = (yd().irp5 || [])[m[1]], l = cert && cert.codes[m[2]]; return `IRP5 ${Number(m[1]) + 1} ${l ? 'code ' + l.code : ''} ${m[3]}`; }
+    return p.replace(/^[yc]\./, '').replace(/\./g, ' › ');
   },
 
   bind() {
@@ -136,6 +181,7 @@ const App = {
     doc.getElementById('clientSwitch').onclick = () => App.clientPicker();
     doc.getElementById('wizardBtn').onclick = () => Wizard.menu();
     doc.getElementById('reportsBtn').onclick = () => App.go('reports');
+    doc.getElementById('lockBtn').onclick = () => App.lockScreen();
     App.bindSearch();
   },
 
@@ -146,7 +192,7 @@ const App = {
     if (ds.route) return App.route(ds.route);
     if (ds.go) { const m = t.closest('.modal-back'); if (m) m.remove(); Wizard.active = null; return App.go(ds.go, ds.field); }
     if (ds.wizard) { Wizard.queue = []; return Wizard.open(ds.wizard); }
-    if (ds.report) return REPORTS.preview(ds.report);
+    if (ds.report) return REPORTS.preview(ds.report, ds.arg);
     if (ds.help) { S.scratch.helpId = ds.help; S.scratch.helpQ = ''; return App.route('help'); }
     if (ds.helpid) { S.scratch.helpId = ds.helpid; return App.refresh(); }
     if (ds.codego) return App.goCode(ds.codego);
@@ -174,6 +220,7 @@ const App = {
       cgt: () => ({ desc: '', type: 'shares', date: '', proceeds: 0, baseCost: 0, costs: 0 }),
       other: () => ({ desc: '', amount: 0, type: 'taxable' })
     };
+    if (window.ACTIONS2 && ACTIONS2[act]) return ACTIONS2[act](t, ds);
     switch (act) {
       case 'add': { const arr = getP(ds.p) || []; arr.push(TPL[ds.tpl]()); setP(ds.p, arr); const flag = { 'y.business': 'business', 'y.rental': 'rental', 'y.cgt.items': 'cgt', 'y.irp5': 'employment', 'y.other': 'other' }[ds.p]; if (flag) y.flags[flag] = true; markDirty(); App.refresh(); break; }
       case 'del': { if (!(await confirmBox('Remove this item?', 'Remove'))) return; const arr = getP(ds.p); arr.splice(Number(ds.i), 1); markDirty(); App.refresh(); break; }

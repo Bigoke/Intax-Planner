@@ -47,7 +47,7 @@ const ARTICLES = [
      <p>The planner calculates both and picks the better one. The claim cannot exceed the allowance received.</p>`),
   A('reimbursive', 'Reimbursive travel (3702 / 3703)', 'travel', 'reimbursive per km rate prescribed rate 4.95', ['3702', '3703'],
     `<p>Reimbursement per business kilometre up to the prescribed rate (R4.95/km for 2027) is not taxable (3703) if no other travel compensation is paid. Amounts above it are taxable (3702).</p>`),
-  A('company-car', 'Company car fringe benefit (3802)', 'employment', 'company car use of motor vehicle fringe 3.5% 3.25%', ['3802', '3816'],
+  A('company-car', 'Company car fringe benefit (3802)', 'companycar', 'company car use of motor vehicle fringe 3.5% 3.25%', ['3802', '3816'],
     `<p>Private use of an employer-owned car is taxed at <b>3.5%</b> of the determined value per month (3.25% if a maintenance plan came with it). The benefit can be reduced on assessment for business kilometres and for private fuel/maintenance paid yourself, supported by a logbook.</p>`),
   A('medical-mtc', 'Medical scheme fees tax credit (s6A)', 'medical', 'medical aid credit monthly dependants s6a', ['4005', '3810', '4116'],
     `<p>A fixed monthly credit for each member on the scheme: main member and first dependant, then a lower amount for each additional dependant (2027: R376, R376, R254). The credit reduces tax payable and is already allowed by your employer through PAYE (code 4116).</p>`),
@@ -104,6 +104,18 @@ const ARTICLES = [
     `<p>Benefits in kind from an employer (low-interest loans, accommodation, medical aid paid by the employer, use of assets) are taxable at their cash equivalent and appear in the 38xx codes.</p>`),
   A('tax-year', 'The tax year', 'client', 'tax year 1 march 28 february year of assessment', [],
     `<p>The individual tax year runs from <b>1 March to the end of February</b>. "2027" means 1 March 2026 – 28 February 2027.</p>`),
+  A('ita34', 'SARS assessment (ITA34) and objections', 'assessment', 'assessment ita34 objection noo dispute 80 business days request reasons correction', [],
+    `<p>After the ITR12 is submitted SARS issues a <b>notice of assessment (ITA34)</b>. Compare it with your computation: differences usually come from missing third-party certificates or deductions SARS did not accept.</p>
+     <p>If you disagree you can request reasons and then lodge a <b>Notice of Objection (NOO)</b> on eFiling within <b>80 business days</b> of the assessment date (public holidays and weekends excluded). Payment of the amount assessed is not suspended unless SARS agrees to a suspension.</p>`),
+  A('joint-estate', 'Married in community of property', 'client', 'married community of property joint estate spouse split 50% interest rental', [],
+    `<p>Spouses married in community of property are each taxed on <b>half</b> of the income from joint assets: interest, dividends, rental income and capital gains. Income from a trade or employment is taxed in the hands of the spouse who earns it.</p>
+     <p>Assets excluded from the joint estate (for example by a will or donation) are taxed 100% in the owner's hands.</p>`),
+  A('interest-89quat', 'Interest on underpaid provisional tax (s89quat)', 'assessment', 'interest 89quat underpayment effective date assessment owing', [],
+    `<p>When the provisional tax and PAYE paid are less than the normal tax on assessment, SARS charges interest from the <b>effective date</b> (30 September for most individuals, or 31 August when taxable income is R50 000 or less) until the assessment. A third (top-up) payment before that date avoids it.</p>`),
+  A('documents', 'Documents to keep', 'documents', 'documents records keep five years certificates supporting', [],
+    `<p>Keep all certificates, invoices, logbooks and statements that support a return for at least <b>five years</b> from the date the return was submitted. SARS can ask for them in a verification or audit.</p>`),
+  A('fees-invoices', 'Recording time and issuing invoices', 'fees', 'fees invoice billing time hours rate vat', [],
+    `<p>Record work done per client on <b>Time & fees</b>. Hours × rate fills the amount. <b>Create invoice</b> bills all unbilled items on your letterhead (with VAT if you are registered) and numbers invoices automatically.</p>`),
   A('update-tables', 'Updating tax tables after the Budget', 'taxtables', 'update tax tables budget new year rates edit import', [],
     `<p>All rates, rebates, thresholds, credits, CGT and travel tables are stored in editable tax packs. Open <b>Tax Tables</b>, choose the year and change any value, or import a pack file. Reset restores the SARS defaults shipped with the app.</p>`)
 ];

@@ -19,7 +19,11 @@ y.provisional.p1.paid = 30000; y.provisional.p1.datePaid = '2026-08-29';
 y.status = 'In progress';
 c1.years[2027] = y;
 const y26 = E.clone(y); y26.year = 2026; y26.irp5 = [irp('Acme Engineering (Pty) Ltd', { 3601: 680000, 3605: 55000, 3701: 90000, 4102: 190000, 4001: 51000, 4005: 17000, 3810: 34000, 3817: 51000 })]; y26.cgt.items = []; y26.provisional.p1.paid = 25000; y26.provisional.p2.paid = 40000; y26.status = 'Assessed';
+y26.assessment = Object.assign(y26.assessment, { date: '2026-10-20', reference: 'ITA34-2026-001', taxableIncome: 0, normalTax: 0, paye: 190000, provisional: 65000, interest: 0, penalties: 0, balance: 0, paymentDue: '2026-11-27' });
+y26.locked = true;
 c1.years[2026] = y26;
+c1.fees = [{ id: 'f1', date: '2026-08-20', year: 2027, desc: 'Provisional tax return – 1st period (IRP6)', hours: 1.5, rate: 950, amount: 1425 }, { id: 'f2', date: '2026-10-05', year: 2027, desc: 'Tax planning consultation', hours: 1, rate: 950, amount: 950 }];
+y.docs = { 'irp5_0': { received: true, date: '2026-04-10' }, medcert: { received: true, date: '2026-04-12' } };
 
 const c2 = Object.assign(E.emptyClient(), { id: 'demo2', firstName: 'Johan', surname: 'van der Merwe', taxRef: '9876543210', dob: '1952-08-30', email: 'johan@example.co.za' });
 const z = E.emptyYear(2027);
@@ -30,5 +34,15 @@ z.medical = { onScheme: true, months: 12, dependants: 1, contributions: 72000, q
 z.lumps.savingsWithdrawal = 25000;
 c2.years[2027] = z;
 
-const settings = { practice: { name: 'Bigoke Tax & Accounting', practitioner: 'A. Practitioner', prNumber: 'PR-0000000', regBody: 'SAIT', address: '1 Main Road\nJohannesburg, 2000', phone: '011 000 0000', email: 'tax@example.co.za', website: '', logo: '', disclaimer: 'This computation is an estimate prepared for tax planning purposes from information supplied by the taxpayer. Final liability is determined by SARS on assessment.' }, lastClient: 'demo1', lastYear: 2027, interestRate: 10.5, reportAccent: '#0b7a75' };
-module.exports = { clients: [c1, c2], settings };
+const c3 = Object.assign(E.emptyClient(), { id: 'demo3', firstName: 'Pieter', surname: 'Nel', taxRef: '1112223334', dob: '1985-02-02', maritalStatus: 'Married in community of property', email: 'pieter@example.co.za' });
+const w = E.emptyYear(2027);
+Object.assign(w.flags, { employment: true, companyCar: true, rental: true, investments: true, provisional: true });
+w.irp5 = [irp('Nel Logistics (Pty) Ltd', { 3601: 540000, 3802: 151200, 4102: 160000, 4005: 24000 })];
+w.companyCar = { enabled: true, determinedValue: 360000, maintenancePlan: true, months: 12, totalKm: 40000, businessKm: 22000, fuelBorne: true, maintBorne: false, insurance: 0, licence: 0 };
+w.rental = [{ property: 'Unit 4, Seaview', rent: 96000, sharePct: 100, expenses: [{ desc: 'Levies', amount: 18000 }] }];
+w.investments.localInterest = 64000;
+w.tfsa = { contributions: 40000, priorTotal: 180000 };
+c3.years[2027] = w;
+
+const settings = { practice: { name: 'Bigoke Tax & Accounting', practitioner: 'A. Practitioner', prNumber: 'PR-0000000', regBody: 'SAIT', address: '1 Main Road\nJohannesburg, 2000', phone: '011 000 0000', email: 'tax@example.co.za', website: '', logo: '', disclaimer: 'This computation is an estimate prepared for tax planning purposes from information supplied by the taxpayer. Final liability is determined by SARS on assessment.' }, billing: { vatRegistered: true, vatNumber: '4000000000', vatRate: 15, invoicePrefix: 'BT', nextInvoice: 101, defaultRate: 950, paymentTerms: 30, bankName: 'Example Bank', accountName: 'Bigoke Tax & Accounting', accountNumber: '000000000', branchCode: '000000', engagementFee: 'R950 per hour, estimated at R4 500 for the full year.' }, lastClient: 'demo1', lastYear: 2027, interestRate: 10.5, reportAccent: '#0b7a75' };
+module.exports = { clients: [c1, c2, c3], settings };

@@ -1,7 +1,7 @@
 {
   "name": "intax-planner",
   "productName": "Intax Planner",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "South African individual income tax planner: provisional tax (IRP6) and ITR12",
   "main": "main.js",
   "author": "Bigoke",
