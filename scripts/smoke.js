@@ -93,6 +93,26 @@ app.whenReady().then(async () => {
   }
   await js(`REPORTS.preview('computation')`); await sleep(600); await shot('report-preview');
 
+  // 1.3: migration to practices, themes, menu headings, custom tax year, new practice
+  const np = await js(`[S.app.practices.length, !!S.practiceId, S.clients.length]`); if (np[0] !== 1 || !np[1] || np[2] < 3) errors.push('migration to practices failed: ' + JSON.stringify(np));
+  await js(`S.clientId='demo1'; S.year=2027; App.route('practice')`);
+  await js(`document.querySelectorAll('.modal-back').forEach(m=>m.remove()); true`);
+  for (const th of ['dark', 'slate', 'sand']) { await js(`S.prefs.theme='${th}'; Theme.apply(); App.route('dashboard'); true`); await shot('theme-' + th); await bad('theme ' + th); }
+  await js(`S.prefs.theme='light'; S.prefs.accent='blue'; Theme.apply(); S.prefs.navCollapsed={Income:true,'Deductions & credits':true}; App.route('practice'); true`); await shot('nav-collapsed');
+  await js(`S.prefs.accent='teal'; S.prefs.navCollapsed={}; Theme.apply(); App.route('taxtables'); ACTIONS2.ttaddyear(); true`); await sleep(200);
+  await js(`document.getElementById('nyOk').click(); true`); await sleep(300);
+  const has28 = await js(`[YEARS.includes(2028), S.scratch.ttYear, !!document.querySelector('#yearSelect option[value="2028"]')]`); if (!has28[0] || has28[1] !== 2028 || !has28[2]) errors.push('custom year not added: ' + JSON.stringify(has28));
+  await shot('taxtables-2028'); await bad('taxtables 2028');
+  await js(`ACTIONS2.ttrowadd({}, {k:'brackets'}); ACTIONS2.ttcalcbase({}, {y:'2028'}); ACTIONS2.ttcalcthr({}, {y:'2028'}); true`);
+  const thr = await js(`pack(2028).thresholds.under65`); if (Math.abs(thr - 99000) > 2) errors.push('threshold recalculation off: ' + thr);
+  await js(`S.year=2028; S.clientId='demo1'; App.route('dashboard'); true`); await shot('client-2028'); await bad('client 2028');
+  await js(`S.year=2027; App.route('settings'); true`); await shot('settings-13'); await bad('settings');
+  await js(`Theme.panel(); true`); await sleep(200); await shot('appearance-panel'); await js(`document.querySelectorAll('.modal-back').forEach(m=>m.remove()); true`);
+  await js(`Practices.create('Second Practice', null, false).then(()=>window.intax.save('app', S.app)); true`); await sleep(400);
+  const np2 = await js(`S.app.practices.length`); if (np2 !== 2) errors.push('new practice not created');
+  await js(`Practices.menu(); true`); await sleep(200); await shot('practices-menu'); await js(`document.querySelectorAll('.modal-back').forEach(m=>m.remove()); true`);
+  const files = fs.readdirSync(path.join(process.env.INTAX_DATA_DIR, 'Practices')); if (files.length !== 2) errors.push('practice folders: ' + files.join(','));
+
   fs.writeFileSync(path.join(OUT, 'errors.txt'), errors.join('\n') || 'none');
   console.log('SMOKE ERRORS:', errors.length ? '\n' + errors.join('\n') : 'none');
   app.exit(0);

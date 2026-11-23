@@ -118,6 +118,12 @@ const ARTICLES = [
     `<p>Keep all certificates, invoices, logbooks and statements that support a return for at least <b>five years</b> from the date the return was submitted. SARS can ask for them in a verification or audit.</p>`),
   A('time-records', 'Recording time per client', 'fees', 'time records hours fees rate work done', [],
     `<p>Record work done per client on <b>Time records</b>: date, tax year, description, hours and rate (hours × rate fills the value). The practice <b>Time records</b> screen and report summarise hours and value per client – use them to bill from your own accounting system.</p>`),
+  A('practices', 'Several practices', 'settings', 'practice practices firm switch multiple example demo delete', [],
+    `<p>Each practice has its own clients, letterhead, logo and practitioner details. Switch practice from the name at the top left. Tax tables, appearance and the PIN are shared by all practices.</p><p>The <b>example practice</b> holds three fictional clients for exploring the app and can be deleted (or added again) under Practice settings.</p>`),
+  A('add-tax-year', 'Adding a new tax year', 'taxtables', 'add new tax year budget custom tables fill manual 2028', [],
+    `<p>On <b>Tax tables</b>, choose <b>+ Add tax year</b>, pick the year and an existing year to copy, then replace the figures from the Budget Review or SARS tables. The buttons <b>Recalculate base tax</b> and <b>Recalculate thresholds</b> work out the dependent figures from the bracket limits, rates and rebates.</p>`),
+  A('appearance', 'Theme and text size', 'settings', 'theme dark mode colour text size font bigger smaller zoom autofit', [],
+    `<p>Use <b>Aa</b> in the top bar (or Practice settings) to choose a theme, an accent colour and the text size. <b>Auto-fit</b> scales the text to the window and screen. Shortcuts: Ctrl + and Ctrl − to change the size, Ctrl 0 to reset.</p>`),
   A('update-tables', 'Updating tax tables after the Budget', 'taxtables', 'update tax tables budget new year rates edit import', [],
     `<p>All rates, rebates, thresholds, credits, CGT and travel tables are stored in editable tax packs. Open <b>Tax Tables</b>, choose the year and change any value, or import a pack file. Reset restores the SARS defaults shipped with the app.</p>`)
 ];

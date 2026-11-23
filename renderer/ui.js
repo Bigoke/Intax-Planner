@@ -5,9 +5,11 @@ const PACKS = window.IntaxPacks.TAX_PACKS;
 const YEARS = window.IntaxPacks.YEARS;
 
 const S = {
+  app: null, prefs: null, practiceId: null,
   clients: [], settings: null, overrides: {}, clientId: null, year: 2027, route: 'dashboard', tab: null, dataDir: '', version: '',
   scratch: {} // temporary UI state (what-if inputs, selected help article, etc.)
 };
+const DEFAULT_PREFS = { theme: 'light', accent: 'teal', textSize: 100, autofit: true, defaultHome: 'practice', security: { pinHash: '', lockMinutes: 0 }, navCollapsed: {}, welcomed: false };
 const DEFAULT_SETTINGS = {
   practice: { name: '', practitioner: '', prNumber: '', regBody: '', address: '', phone: '', email: '', website: '', logo: '', disclaimer: 'This computation is an estimate prepared for tax planning purposes from information supplied by the taxpayer. Final liability is determined by SARS on assessment.' },
   lastClient: null, lastYear: 2027, interestRate: 10.5, codes: null, reportAccent: '#0b7a75',
@@ -50,6 +52,7 @@ function rootFor(p) {
   if (p.startsWith('c.')) return [cur(), p.slice(2)];
   if (p.startsWith('s.')) return [S.settings, p.slice(2)];
   if (p.startsWith('t.')) return [S.scratch, p.slice(2)];
+  if (p.startsWith('a.')) return [S.prefs, p.slice(2)];
   return [null, p];
 }
 function getP(p) {
@@ -72,9 +75,26 @@ function markDirty(what) {
 }
 async function saveAll() {
   if (!window.intax) return;
-  await window.intax.save('clients', S.clients);
-  await window.intax.save('settings', S.settings);
+  if (S.practiceId) {
+    await window.intax.save('clients', S.clients, S.practiceId);
+    await window.intax.save('settings', S.settings, S.practiceId);
+    const p = (S.app.practices || []).find(x => x.id === S.practiceId);
+    if (p && S.settings.practice.name && p.name !== S.settings.practice.name && !p.example) p.name = S.settings.practice.name;
+  }
   await window.intax.save('taxpacks', S.overrides);
+  if (S.app) { S.app.prefs = S.prefs; await window.intax.save('app', S.app); }
+}
+async function flushSave() { clearTimeout(saveTimer); await saveAll(); }
+// Built-in SARS years plus tax years added by the user on the Tax Tables screen.
+function refreshYears() {
+  const custom = Object.keys(S.overrides || {}).map(Number).filter(y => !PACKS[y] && S.overrides[y] && S.overrides[y].custom);
+  const all = [...new Set([...window.IntaxPacks.BUILT_IN_YEARS, ...custom])].sort((a, b) => a - b);
+  YEARS.length = 0; YEARS.push(...all);
+}
+function fillYearSelect() {
+  const el = document.getElementById('yearSelect'); if (!el) return;
+  el.innerHTML = YEARS.slice().reverse().map(y => `<option value="${y}">${y} · ${pack(y).label.split(' ')[0]}${PACKS[y] ? '' : ' *'}</option>`).join('');
+  el.value = S.year;
 }
 
 // ---------- formatting ----------
@@ -103,7 +123,7 @@ function f(o) {
       input = `<select id="${id}" data-p="${esc(o.p)}" ${o.num ? 'data-num="1"' : ''}>${(o.options || []).map(op => { const [val, lab] = Array.isArray(op) ? op : [op, op]; return `<option value="${esc(val)}" ${String(val) === String(v) ? 'selected' : ''}>${esc(lab)}</option>`; }).join('')}</select>`; break;
     case 'textarea': input = `<textarea id="${id}" data-p="${esc(o.p)}" placeholder="${esc(o.placeholder || '')}">${esc(v || '')}</textarea>`; break;
     case 'date': input = `<input type="date" id="${id}" data-p="${esc(o.p)}" value="${esc(v || '')}">`; break;
-    case 'money': case 'int': case 'dec':
+    case 'money': case 'int': case 'dec': case 'pct':
       input = `<input type="text" inputmode="decimal" class="num ${o.readonly ? 'calc' : ''}" id="${id}" data-p="${esc(o.p)}" data-num="${o.type}" value="${esc(fmtInput(v))}" placeholder="${esc(o.placeholder ?? (o.type === 'money' ? '0' : ''))}" ${ro}>`; break;
     default: input = `<input type="text" id="${id}" data-p="${esc(o.p)}" value="${esc(v ?? '')}" placeholder="${esc(o.placeholder || '')}" ${ro}>`;
   }
@@ -175,7 +195,7 @@ function svgBracketBar(brackets, opts = {}) {
   if (!total) return '<div class="muted">No taxable income</div>';
   const W = opts.width || 520; let x = 0;
   const shades = ['#cfe8e6', '#9fd2ce', '#6fbab4', '#3f9f98', '#0b7a75', '#0a5f5b', '#0d2340'];
-  const parts = used.map((b, i) => { const w = W * b.amount / total; const s = `<rect x="${x.toFixed(1)}" y="0" width="${w.toFixed(1)}" height="30" fill="${shades[brackets.indexOf(b)]}"><title>${Math.round(b.rate * 100)}%: R ${E.fmt(b.amount)}</title></rect>${w > 34 ? `<text x="${(x + w / 2).toFixed(1)}" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="${brackets.indexOf(b) > 3 ? '#fff' : '#0d2340'}">${Math.round(b.rate * 100)}%</text>` : ''}`; x += w; return s; }).join('');
+  const parts = used.map((b, i) => { const w = W * b.amount / total; const s = `<rect x="${x.toFixed(1)}" y="0" width="${w.toFixed(1)}" height="30" fill="${shades[brackets.indexOf(b)]}"><title>${Math.round(b.rate * 100)}%: R ${E.fmt(b.amount)}</title></rect>${w > 34 ? `<text x="${(x + w / 2).toFixed(1)}" y="20" data-keep="1" text-anchor="middle" font-size="11" font-weight="700" fill="${brackets.indexOf(b) > 3 ? '#fff' : '#0d2340'}">${Math.round(b.rate * 100)}%</text>` : ''}`; x += w; return s; }).join('');
   return `<svg width="100%" viewBox="0 0 ${W} 30" style="max-width:${W}px;border-radius:4px">${parts}</svg>`;
 }
 function incomeMix(r) {

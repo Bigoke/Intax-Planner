@@ -3,17 +3,22 @@
 
 const App = {
   async init() {
-    const d = window.intax ? await window.intax.load() : { clients: [], settings: null, taxpacks: {} };
+    const d = window.intax ? await window.intax.load() : { clients: [], settings: null, taxpacks: {}, appData: { practices: [], prefs: {} } };
+    S.app = d.appData || { practices: [], prefs: {} }; S.app.practices = S.app.practices || [];
+    S.prefs = E.deepMerge(E.clone(DEFAULT_PREFS), S.app.prefs || {}); S.app.prefs = S.prefs;
+    Theme.apply();
+    if (!S.app.practices.length) { await Practices.createExample(true); location.reload(); return; }
+    S.practiceId = d.practiceId; S.app.current = S.practiceId;
     S.clients = d.clients || [];
-    S.clients.forEach(c => Object.values(c.years || {}).forEach(y => E.migrateYear(y))); S.overrides = d.taxpacks || {}; S.dataDir = d.dataDir || ''; S.version = d.version || '';
+    S.clients.forEach(c => Object.values(c.years || {}).forEach(y => E.migrateYear(y))); S.overrides = d.taxpacks || {}; refreshYears(); S.dataDir = d.dataDir || ''; S.version = d.version || '';
     S.settings = E.deepMerge(E.clone(DEFAULT_SETTINGS), d.settings || {});
     S.year = YEARS.includes(S.settings.lastYear) ? S.settings.lastYear : YEARS[YEARS.length - 1];
     S.clientId = S.clients.some(c => c.id === S.settings.lastClient) ? S.settings.lastClient : (S.clients[0] || {}).id || null;
-    document.getElementById('yearSelect').innerHTML = YEARS.slice().reverse().map(y => `<option value="${y}">${y} · ${PACKS[y].label.split(' ')[0]}</option>`).join('');
+    fillYearSelect();
     App.bind();
-    App.route(S.settings.defaultHome === 'client' && S.clientId ? 'dashboard' : 'practice');
-    if (!S.clients.length) setTimeout(() => App.welcome(), 300);
-    if (S.settings.security.pinHash) App.lockScreen();
+    App.route(S.prefs.defaultHome === 'client' && S.clientId ? 'dashboard' : 'practice');
+    if (!S.prefs.welcomed || !S.clients.length) setTimeout(() => App.welcome(), 300);
+    if (S.prefs.security.pinHash) App.lockScreen();
     App.idleWatch();
   },
 
@@ -24,19 +29,19 @@ const App = {
   },
 
   async lockScreen() {
-    if (!S.settings.security.pinHash) { toast('Set a PIN in Practice settings first.'); return; }
+    if (!S.prefs.security.pinHash) { toast('Set a PIN in Practice settings first.'); return; }
     const el = document.createElement('div');
     el.className = 'lock-screen';
     el.innerHTML = `<div class="lock-box"><div class="brand-mark" style="width:54px;height:54px;font-size:20px;margin:0 auto 12px">IT</div><h2>Intax Planner is locked</h2><p class="muted">${esc(S.settings.practice.name || '')}</p><input type="password" id="pinIn" placeholder="Enter PIN" autocomplete="off" style="text-align:center;font-size:18px;letter-spacing:6px"><div id="pinErr" class="muted" style="height:18px;margin-top:6px"></div><button class="btn btn-primary" id="pinGo" style="width:100%">Unlock</button></div>`;
     document.body.appendChild(el);
     const inp = el.querySelector('#pinIn'); inp.focus();
-    const go = async () => { if (await sha256('intax:' + inp.value) === S.settings.security.pinHash) el.remove(); else { el.querySelector('#pinErr').textContent = 'Incorrect PIN'; inp.value = ''; inp.focus(); } };
+    const go = async () => { if (await sha256('intax:' + inp.value) === S.prefs.security.pinHash) el.remove(); else { el.querySelector('#pinErr').textContent = 'Incorrect PIN'; inp.value = ''; inp.focus(); } };
     el.querySelector('#pinGo').onclick = go; inp.onkeydown = e => { if (e.key === 'Enter') go(); };
   },
   idleWatch() {
     let last = Date.now();
     ['mousemove', 'keydown', 'click'].forEach(ev => document.addEventListener(ev, () => { last = Date.now(); }, true));
-    setInterval(() => { const m = E.n(S.settings.security.lockMinutes); if (m && S.settings.security.pinHash && Date.now() - last > m * 60000 && !document.querySelector('.lock-screen')) App.lockScreen(); }, 15000);
+    setInterval(() => { const m = E.n(S.prefs.security.lockMinutes); if (m && S.prefs.security.pinHash && Date.now() - last > m * 60000 && !document.querySelector('.lock-screen')) App.lockScreen(); }, 15000);
   },
 
   afterClientChange() { S.settings.lastClient = S.clientId; S.settings.lastYear = S.year; markDirty(); App.renderChrome(); },
@@ -137,7 +142,8 @@ const App = {
     const before = getP(p);
     setP(p, v);
     if ((p.startsWith('y.') || p.startsWith('c.')) && before !== v && cur()) App.log(p, before, v);
-    if (p === 'y.flags.provisional' || p.startsWith('s.')) App.renderChrome();
+    if (p.startsWith('a.')) Theme.apply();
+    if (p === 'y.flags.provisional' || p.startsWith('s.') || p.startsWith('a.')) App.renderChrome();
     markDirty();
   },
 
@@ -305,4 +311,4 @@ const App = {
   }
 };
 window.App = App;
-App.init();
+

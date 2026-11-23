@@ -17,9 +17,10 @@ function deepMerge(base, over) {
   return out;
 }
 function getPack(packs, year, overrides) {
-  const base = packs[year];
+  const custom = overrides && overrides[year];
+  const base = packs[year] || (custom && custom.custom ? custom : null);
   if (!base) throw new Error('No tax tables for ' + year);
-  return deepMerge(clone(base), overrides && overrides[year]);
+  return packs[year] ? deepMerge(clone(base), custom) : clone(base);
 }
 
 // ---------- basic tables ----------

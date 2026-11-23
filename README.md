@@ -33,6 +33,14 @@ A Windows desktop tax planning workstation for South African tax practitioners. 
 - **What-if planner:** test RA top-ups, donations, bonuses and asset sales before year end.
 - **Tax tables screen:** edit brackets, rebates, thresholds, medical credits, CGT, retirement cap, travel tables and lump sum tables for any year. You can also import or export them, or reset to the SARS defaults.
 
+## New in 1.3
+- **Several practices:** each has its own clients, letterhead, logo and practitioner details. Switch from the practice name at the top left. Tax tables, appearance and the PIN are shared. Data folders from earlier versions are upgraded automatically.
+- **Example practice:** three fictional clients, created on first start. You can delete it, or add it again, from the practice menu or Practice settings.
+- **Add your own tax years:** on the Tax tables screen. The tables are copied from an existing year for you to update, and you can recalculate the base tax and thresholds. More rates are now editable (CGT inclusion, retirement %, TFSA, dividends tax, company car rates, penalty rates), and you can add or remove bracket and travel-table rows.
+- **Appearance:** Light, Slate, Warm and Dark themes, seven accent colours, four text sizes plus auto-fit (Ctrl + / Ctrl − / Ctrl 0).
+- **Menu:** bold section headings that collapse and expand.
+- **New icon:** a minimalist "i" mark (`build/icon.svg`).
+
 ## New in 1.2
 - **Several vehicles per tax year:**
   - Travel logbook claims: each vehicle has its own value, days used (fixed cost pro-rated), kilometres and costs, and its own deemed or actual method. The total is limited to the travel allowance.

@@ -176,5 +176,15 @@ eq('ho not eligible: only wear and tear', r.homeOffice.total, 9500);
 eq('laptop written off', E.assetWearTear({ cost: 24000, years: 2, purchaseDate: '2024-03-01' }, P(2027)).claim, 0);
 eq('desktop year 2 of 3', E.assetWearTear({ cost: 30000, years: 3, purchaseDate: '2025-03-01' }, P(2027)).claim, 10000);
 
+// 21. Custom (user-added) tax year
+const { yearMeta } = require('../src/data/taxpacks.js');
+const ov = { 2028: Object.assign(JSON.parse(JSON.stringify(P(2027))), yearMeta(2028), { custom: true }) };
+ov[2028].rebates.primary = 18500;
+const p28 = E.getPack(TAX_PACKS, 2028, ov);
+eq('custom year primary', p28.rebates.primary, 18500);
+eq('custom year end', p28.end === '2028-02-29' ? 1 : 0, 1);
+y = year(2028, d => { d.irp5 = irp({ 3601: 600000 }); });
+eq('custom year tax', E.compute(client(), y, p28, CODES).normalTax, 150727 - 18500);
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

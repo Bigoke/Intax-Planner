@@ -126,7 +126,9 @@ const TAX_PACKS = {
 TAX_PACKS[2021].tfsa = { annual: 36000, lifetime: 500000 };
 
 const YEARS = Object.keys(TAX_PACKS).map(Number).sort();
+// Label and dates for any tax year (used for tax years added by the user).
+function yearMeta(year) { const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0; return { year, label: `${year - 1}/${String(year).slice(2)} (1 Mar ${year - 1} – ${leap ? 29 : 28} Feb ${year})`, start: `${year - 1}-03-01`, end: `${year}-02-${leap ? 29 : 28}` }; }
 
-const __exp = { TAX_PACKS, YEARS };
+const __exp = { TAX_PACKS, YEARS, BUILT_IN_YEARS: YEARS.slice(), yearMeta };
 if (typeof module !== 'undefined' && module.exports) module.exports = __exp; else root.IntaxPacks = __exp;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -261,9 +261,9 @@ const _clients = SCREENS.clients;
 SCREENS.clients = () => _clients().replace('<button class="btn" data-report="register">Register PDF</button>', '<button class="btn" data-act="csv" data-what="register">Export CSV</button><button class="btn" data-report="register">Register PDF</button>');
 const _settings = SCREENS.settings;
 SCREENS.settings = () => {
-  const B = S.settings.billing, sec = S.settings.security;
+  const sec = S.prefs.security;
   return _settings() + `<div class="grid g2"><div class="card"><h2>Fees (time records & engagement letters)</h2><div class="grid g3">${f({ p: 's.billing.defaultRate', label: 'Default hourly rate', type: 'money' })}${f({ p: 's.billing.paymentTerms', label: 'Payment terms in engagement letters (days)', type: 'int' })}<div></div></div><div style="margin-top:12px">${f({ p: 's.billing.engagementFee', label: 'Fee basis for engagement letters', placeholder: 'e.g. R950 per hour' })}</div></div>
-  <div class="card"><h2>Security & start-up</h2><p class="muted">Client files contain personal information (POPIA). Protect the app with a PIN.</p><div class="btn-row">${sec.pinHash ? '<span class="pill ok">PIN set</span><button class="btn" data-act="setpin">Change PIN</button><button class="btn btn-danger" data-act="clearpin">Remove PIN</button>' : '<button class="btn btn-primary" data-act="setpin">Set a PIN</button>'}</div><div class="grid g2" style="margin-top:12px">${f({ p: 's.security.lockMinutes', label: 'Auto-lock after minutes idle (0 = never)', type: 'int' })}${f({ p: 's.defaultHome', label: 'Start-up screen', type: 'select', options: [['practice', 'Practice dashboard'], ['client', 'Last client']] })}</div></div></div>`;
+  <div class="card"><h2>Security & start-up</h2><p class="muted">Client files contain personal information (POPIA). Protect the app with a PIN.</p><div class="btn-row">${sec.pinHash ? '<span class="pill ok">PIN set</span><button class="btn" data-act="setpin">Change PIN</button><button class="btn btn-danger" data-act="clearpin">Remove PIN</button>' : '<button class="btn btn-primary" data-act="setpin">Set a PIN</button>'}</div><div class="grid g2" style="margin-top:12px">${f({ p: 'a.security.lockMinutes', label: 'Auto-lock after minutes idle (0 = never)', type: 'int' })}${f({ p: 'a.defaultHome', label: 'Start-up screen', type: 'select', options: [['practice', 'Practice dashboard'], ['client', 'Last client']] })}</div></div></div>`;
 };
 
 // Reports screen grouped by category
@@ -285,9 +285,9 @@ const ACTIONS2 = {
   async setpin() {
     const m = modal({ title: 'Set PIN', body: '<div class="grid g2"><div class="field"><label>New PIN (4+ digits)</label><input type="password" id="pin1"></div><div class="field"><label>Repeat PIN</label><input type="password" id="pin2"></div></div>', foot: '<button class="btn" data-close>Cancel</button><button class="btn btn-primary" id="pinOk">Save PIN</button>' });
     m.el.querySelector('#pin1').focus();
-    m.el.querySelector('#pinOk').onclick = async () => { const a = m.el.querySelector('#pin1').value, b = m.el.querySelector('#pin2').value; if (a.length < 4) return toast('Use at least 4 characters.'); if (a !== b) return toast('PINs do not match.'); S.settings.security.pinHash = await sha256('intax:' + a); markDirty(); m.el.remove(); App.refresh(); toast('PIN saved – use 🔒 to lock'); };
+    m.el.querySelector('#pinOk').onclick = async () => { const a = m.el.querySelector('#pin1').value, b = m.el.querySelector('#pin2').value; if (a.length < 4) return toast('Use at least 4 characters.'); if (a !== b) return toast('PINs do not match.'); S.prefs.security.pinHash = await sha256('intax:' + a); markDirty(); m.el.remove(); App.refresh(); toast('PIN saved – use 🔒 to lock'); };
   },
-  async clearpin() { if (!(await confirmBox('Remove the PIN?', 'Remove'))) return; S.settings.security.pinHash = ''; markDirty(); App.refresh(); },
+  async clearpin() { if (!(await confirmBox('Remove the PIN?', 'Remove'))) return; S.prefs.security.pinHash = ''; markDirty(); App.refresh(); },
   async csv(t, ds) {
     let rows = [], name = 'export.csv';
     if (ds.what === 'computation') { const r = result(), c = cur(); name = `Computation ${clientName(c)} ${S.year}.csv`; rows = [['Section', 'Code', 'Description', 'Amount']].concat(r.lines.map(l => [l.section, l.code, l.label, l.kind === 'note' ? '' : l.amount])); rows.push(['', '', 'Taxable income', r.taxableIncome], ['', '', 'Normal tax', r.normalTax], ['', '', 'Lump sum tax', r.lump.total], ['', '', 'Total liability', r.liability], ['', '4102', 'PAYE', -r.paye], ['', '', 'Provisional paid', -r.provisionalPaid], ['', '', 'Balance', r.balance]); }
