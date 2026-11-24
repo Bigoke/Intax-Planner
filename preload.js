@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('intax', {
   writePractice: (id, clients, settings) => ipcRenderer.invoke('practice:write', id, clients, settings),
   removePractice: (id) => ipcRenderer.invoke('practice:remove', id),
   bundle: () => ipcRenderer.invoke('app:bundle'),
+  pickItc12: () => ipcRenderer.invoke('itc12:pick'),
   setZoom: (f) => webFrame.setZoomFactor(f),
   pdf: (html, name, landscape) => ipcRenderer.invoke('report:pdf', html, name, landscape),
   pdfTo: (html, file, landscape) => ipcRenderer.invoke('report:pdfTo', html, file, landscape),

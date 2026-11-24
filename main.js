@@ -155,7 +155,36 @@ ipcMain.handle('app:restoreBackup', (e, name) => {
 });
 ipcMain.handle('app:bundle', () => bundle());
 
+// ---------- SARS tax calculator (ITC12) PDF import ----------
+async function extractPdfLines(file) {
+  // Load pdf.js from the unpacked folder so ES module loading works in the installed app.
+  const modPath = require.resolve('pdfjs-dist/legacy/build/pdf.mjs').replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
+  const { getDocument } = await import(require('url').pathToFileURL(modPath).href);
+  const data = new Uint8Array(fs.readFileSync(file));
+  const doc = await getDocument({ data, useSystemFonts: true, isEvalSupported: false, disableFontFace: true }).promise;
+  const lines = [];
+  for (let p = 1; p <= doc.numPages; p++) {
+    const tc = await (await doc.getPage(p)).getTextContent();
+    const rows = [];
+    for (const it of tc.items) {
+      if (!it.str || !it.str.trim()) continue;
+      const y = it.transform[5];
+      let row = rows.find(r => Math.abs(r.y - y) <= 2.5);
+      if (!row) { row = { y, items: [] }; rows.push(row); }
+      row.items.push({ x: it.transform[4], s: it.str.trim() });
+    }
+    rows.sort((a, b) => b.y - a.y).forEach(r => lines.push(r.items.sort((a, b) => a.x - b.x).map(i => i.s).join('  ')));
+  }
+  await doc.destroy();
+  return lines;
+}
+ipcMain.handle('itc12:pick', async () => {
+  const res = await dialog.showOpenDialog(win, { title: 'Import SARS tax calculator result (ITC12)', properties: ['openFile'], filters: [{ name: 'PDF', extensions: ['pdf'] }] });
+  if (res.canceled || !res.filePaths[0]) return null;
+  return { file: path.basename(res.filePaths[0]), lines: await extractPdfLines(res.filePaths[0]) };
+});
+
 app.whenReady().then(() => { ensureDirs(); firstRun = migrate().firstRun; dailyBackup(); createWindow(); });
 app.on('window-all-closed', () => app.quit());
-module.exports = { htmlToPdfBuffer };
+module.exports = { htmlToPdfBuffer, extractPdfLines };
 // Zoom (text size) shortcuts are handled in the renderer.

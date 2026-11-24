@@ -1,7 +1,7 @@
 {
   "name": "intax-planner",
   "productName": "Intax Planner",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "South African individual income tax planner: provisional tax (IRP6) and ITR12",
   "main": "main.js",
   "author": "Bigoke",
@@ -46,11 +46,17 @@
     "portable": {
       "artifactName": "Intax-Planner-Portable-${version}.exe"
     },
-    "afterPack": "build/afterPack.js"
+    "afterPack": "build/afterPack.js",
+    "asarUnpack": [
+      "node_modules/pdfjs-dist/**"
+    ]
   },
   "devDependencies": {
     "electron": "^33.4.11",
     "electron-builder": "^25.1.8",
     "resedit": "^1.7.2"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^4.10.38"
   }
 }

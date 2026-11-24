@@ -186,5 +186,46 @@ eq('custom year end', p28.end === '2028-02-29' ? 1 : 0, 1);
 y = year(2028, d => { d.irp5 = irp({ 3601: 600000 }); });
 eq('custom year tax', E.compute(client(), y, p28, CODES).normalTax, 150727 - 18500);
 
+// 22. SARS tax calculator (ITC12) parse and reconcile (fictional figures)
+const IT = require('../src/engine/itc12.js');
+const itcText = `INCOME TAX  ITC12
+Tax Calculator Result
+Reference Number:  0123456789
+Year Of Assessment:  2026
+Issue Date:  20261101
+Amounts Assessed
+Code  Source Code Description  Rand
+3601  INCOME - TAXABLE  500000.00
+4201  LOCAL INTEREST (EXCLUDING SARS  10000.00
+3499  LOSS-OTHER NOT SPECIFIED  20000.00
+Total  490000.00
+Deductions
+Code  Source Code Description  Rand
+Total  0.00
+Taxable Income  490000.00
+Rating percentage (%)  23.35
+Normal tax on taxable income  114407.00
+Rebates  17235.00
+Additional Tax  0.00
+Administrative penalties  0.00
+Retirement fund lump sum benefit tax liability  0.00
+Retirement fund lump sum withdrawal benefit tax liability  0.00
+Subtotal  97172.00
+Employees' tax and tax credits  100000.00
+Calculated Result  -2828.00`;
+const it = IT.parseItc12(itcText);
+eq('itc valid', it.valid ? 1 : 0, 1);
+eq('itc loss signed', it.assessed[2].signed, -20000);
+eq('itc result', it.result, -2828);
+eq('itc year', it.year, 2026);
+y = year(2026, d => { d.irp5 = irp({ 3601: 500000, 4102: 100000 }); d.investments.localInterest = 33800; d.business = [{ name: 'Side', turnover: 0, expenses: [{ desc: 'x', amount: 20000 }] }]; d.provisional.p1.paid = 5000; });
+r = E.compute(client(), y, P(2026), CODES);
+const rc = IT.reconcileItc12(it, r, r.provisionalPaid);
+eq('itc TI agrees', rc.tax[0].diff, 0);
+eq('itc result agrees', rc.tax[6].diff, 0);
+eq('itc categories agree', rc.rows.reduce((a, x) => a + Math.abs(x.diff), 0), 0);
+eq('itc after provisional', rc.sarsAfterProvisional, -7828);
+eq('itc no difference', rc.difference, 0);
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

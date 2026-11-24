@@ -33,6 +33,13 @@ A Windows desktop tax planning workstation for South African tax practitioners. 
 - **What-if planner:** test RA top-ups, donations, bonuses and asset sales before year end.
 - **Tax tables screen:** edit brackets, rebates, thresholds, medical credits, CGT, retirement cap, travel tables and lump sum tables for any year. You can also import or export them, or reset to the SARS defaults.
 
+## New in 1.4
+- **SARS eFiling tax calculator (ITC12):**
+  - Import the "Tax Calculator Result" PDF, paste its text, or type the figures. The client and year are matched on the reference number and year of assessment.
+  - Compares SARS and the plan line by line (taxable income, normal tax, rebates and credits, PAYE, calculated result) and by income type and source code.
+  - Deducts the provisional tax recorded in the app, which SARS's calculator leaves out, to show the **expected payable or refund on assessment**.
+  - Earlier imports are kept, and there is a reconciliation PDF report.
+
 ## New in 1.3
 - **Several practices:** each has its own clients, letterhead, logo and practitioner details. Switch from the practice name at the top left. Tax tables, appearance and the PIN are shared. Data folders from earlier versions are upgraded automatically.
 - **Example practice:** three fictional clients, created on first start. You can delete it, or add it again, from the practice menu or Practice settings.

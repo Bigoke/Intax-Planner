@@ -84,7 +84,7 @@ app.whenReady().then(async () => {
   await js(`const g=document.getElementById('globalSearch'); g.value='3701'; g.dispatchEvent(new Event('input'));`); await shot('global-search-3701');
   await js(`document.getElementById('searchResults').classList.add('hidden')`);
 
-  const reports = await js(`REPORTS.list().map(r=>r.id).concat(['pack'])`);
+  const reports = await js(`REPORTS.list().map(r=>r.id).filter(id=>id!=='sarscalc').concat(['pack'])`);
   for (const id of reports) {
     const rep = await js(`(()=>{try{ if('${id}'==='companycar'){S.clientId='demo3'} else {S.clientId='demo1'}; S.year = '${id}'==='assessment' ? 2026 : 2027; return REPORTS.build('${id}')}catch(e){return {error:e.message}}})()`);
     if (rep.error) { errors.push('report ' + id + ': ' + rep.error); continue; }
@@ -112,6 +112,20 @@ app.whenReady().then(async () => {
   const np2 = await js(`S.app.practices.length`); if (np2 !== 2) errors.push('new practice not created');
   await js(`Practices.menu(); true`); await sleep(200); await shot('practices-menu'); await js(`document.querySelectorAll('.modal-back').forEach(m=>m.remove()); true`);
   const files = fs.readdirSync(path.join(process.env.INTAX_DATA_DIR, 'Practices')); if (files.length !== 2) errors.push('practice folders: ' + files.join(','));
+
+  // 1.4: SARS tax calculator – build an ITC12-style PDF from the plan, extract it like a real import, reconcile
+  await js(`document.querySelectorAll('.modal-back').forEach(m=>m.remove()); S.clientId='demo1'; S.year=2027; App.route('sarscalc'); true`); await shot('sarscalc-empty');
+  const itcHtml = await js(`(()=>{ const r=result(), c=cur(); const L=[['3601','INCOME - TAXABLE',r.employment],['4201','LOCAL INTEREST (EXCLUDING SARS',r.interest.local-r.interest.exempt],['4238','DISTRIBUTION FROM REIT/TAXABLE L',r.dividends.reit],['4216','FOREIGN DIVIDENDS-PROFIT',r.dividends.foreign-r.dividends.foreignExempt],['4250','CAPITAL GAIN:LOCAL',r.cgt.taxableGain],['3401','PROFIT-CONSULTING',r.businessNet],['4210','RENTAL INCOME - PROFIT',r.rentalNet]]; const ded=r.incomeTotal+r.cgt.taxableGain-r.taxableIncome; const tot=L.reduce((a,x)=>a+x[2],0); const f=(v)=>v.toFixed(2); const reb=r.rebates+r.medical.mtcUsed+r.medical.additionalUsed+r.foreignTaxCredit; return '<html><body style="font-family:Arial;font-size:11pt"><h3>INCOME TAX ITC12 Tax Calculator Result</h3><p>Reference Number: '+c.taxRef+'</p><p>Year Of Assessment: 2027</p><p>Issue Date: 20261120</p><p>Amounts Assessed</p><table>'+L.map(x=>'<tr><td>'+x[0]+'</td><td style="width:400px">'+x[1]+'</td><td>'+f(x[2])+'</td></tr>').join('')+'<tr><td>Total</td><td></td><td>'+f(tot)+'</td></tr></table><p>Deductions</p><table><tr><td>4029</td><td style="width:400px">DEDUCTIONS - OTHER</td><td>'+f(ded)+'</td></tr><tr><td>Total</td><td></td><td>'+f(ded)+'</td></tr></table><table><tr><td style="width:500px">Taxable Income</td><td>'+f(r.taxableIncome)+'</td></tr><tr><td>Normal tax on taxable income</td><td>'+f(r.grossTax)+'</td></tr><tr><td>Rebates</td><td>'+f(reb)+'</td></tr><tr><td>Additional Tax</td><td>0.00</td></tr><tr><td>Subtotal</td><td>'+f(r.liability)+'</td></tr><tr><td>Employees&#39; tax and tax credits</td><td>'+f(r.paye)+'</td></tr><tr><td>Calculated Result</td><td>'+f(r.liability-r.paye)+'</td></tr></table></body></html>'; })()`);
+  const itcPdf = path.join(OUT, 'itc12-synthetic.pdf'); fs.writeFileSync(itcPdf, await htmlToPdfBuffer(itcHtml));
+  const { extractPdfLines } = require('../main.js');
+  const itcLines = await extractPdfLines(itcPdf);
+  await js(`window.ItcImport.store(window.ItcImport.parse(${JSON.stringify(itcLines)}), 'itc12-synthetic.pdf'); true`); await sleep(500);
+  const rcs = await js(`(()=>{const R=itc12Recon(); return R ? [R.it.valid, R.rc.difference, R.rc.tax[0].diff, R.it.assessed.length, R.rc.sarsAfterProvisional] : null})()`);
+  if (!rcs || !rcs[0] || Math.abs(rcs[1]) > 1 || Math.abs(rcs[2]) > 1 || rcs[3] !== 7) errors.push('ITC12 import/reconcile: ' + JSON.stringify(rcs));
+  await shot('sarscalc'); await bad('sarscalc');
+  const itRep = await js(`(()=>{try{return REPORTS.build('sarscalc')}catch(e){return {error:e.message}}})()`);
+  if (itRep.error) errors.push('sarscalc report: ' + itRep.error); else fs.writeFileSync(path.join(OUT, 'report-sarscalc.pdf'), await htmlToPdfBuffer(itRep.html));
+  await js(`App.route('final'); true`); await bad('final with itc12');
 
   fs.writeFileSync(path.join(OUT, 'errors.txt'), errors.join('\n') || 'none');
   console.log('SMOKE ERRORS:', errors.length ? '\n' + errors.join('\n') : 'none');

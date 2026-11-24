@@ -124,6 +124,9 @@ const ARTICLES = [
     `<p>On <b>Tax tables</b>, choose <b>+ Add tax year</b>, pick the year and an existing year to copy, then replace the figures from the Budget Review or SARS tables. The buttons <b>Recalculate base tax</b> and <b>Recalculate thresholds</b> work out the dependent figures from the bracket limits, rates and rebates.</p>`),
   A('appearance', 'Theme and text size', 'settings', 'theme dark mode colour text size font bigger smaller zoom autofit', [],
     `<p>Use <b>Aa</b> in the top bar (or Practice settings) to choose a theme, an accent colour and the text size. <b>Auto-fit</b> scales the text to the window and screen. Shortcuts: Ctrl + and Ctrl − to change the size, Ctrl 0 to reset.</p>`),
+  A('itc12', 'SARS eFiling tax calculator (ITC12)', 'sarscalc', 'sars calculator itc12 efiling calculate preview estimate assessment refund import pdf', [],
+    `<p>On eFiling, the <b>Calculate</b> button on the ITR12 produces a <b>Tax Calculator Result (ITC12)</b>: the amounts per source code, taxable income, normal tax, rebates, employees' tax and a calculated result.</p>
+     <p>It does <b>not</b> include provisional tax payments, assessed losses brought forward or other carry-overs. Save it as PDF and import it on the <b>SARS tax calculator</b> screen: Intax Planner compares it with the plan line by line and deducts the provisional tax recorded to show the expected payable or refund on assessment.</p>`),
   A('update-tables', 'Updating tax tables after the Budget', 'taxtables', 'update tax tables budget new year rates edit import', [],
     `<p>All rates, rebates, thresholds, credits, CGT and travel tables are stored in editable tax packs. Open <b>Tax Tables</b>, choose the year and change any value, or import a pack file. Reset restores the SARS defaults shipped with the app.</p>`)
 ];
