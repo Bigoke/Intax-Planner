@@ -221,10 +221,11 @@ function fileName(title) { const c = cur(); return `${title} - ${c ? clientName(
 
 function preview(id, arg) {
   let rep; try { rep = build(id, arg); } catch (e) { toast(e.message); return; }
-  const m = modal({ title: rep.title, wide: true, body: '<iframe class="preview"></iframe>', foot: `<span class="muted" style="margin-right:auto">A4 · ${esc(S.settings.practice.name || 'Set your practice details in Practice settings')}</span><button class="btn" id="rpPrint">Print…</button><button class="btn btn-primary" id="rpPdf">Save PDF</button>` });
+  const m = modal({ title: rep.title, wide: true, body: '<iframe class="preview"></iframe>', foot: `<span class="muted" style="margin-right:auto">A4 · ${esc(S.settings.practice.name || 'Set your practice details in Practice settings')}</span><button class="btn" id="rpXlsx">Export to Excel</button><button class="btn" id="rpPrint">Print…</button><button class="btn btn-primary" id="rpPdf">Save PDF</button>` });
   m.body.style.padding = '10px';
   m.el.querySelector('iframe').srcdoc = rep.html.replace('<body>', '<body style="background:#e9edf2"><div style="background:#fff;max-width:210mm;margin:12px auto;padding:14mm 13mm;box-shadow:0 2px 10px rgba(0,0,0,.15)">').replace('</body>', '</div></body>');
   m.el.querySelector('#rpPdf').onclick = async () => { const p = await window.intax.pdf(rep.html, rep.fileName || fileName(rep.title)); if (p) toast('Saved ' + p); };
+  m.el.querySelector('#rpXlsx').onclick = () => window.XL && XL.report(id, arg, rep);
   m.el.querySelector('#rpPrint').onclick = () => window.intax.print(rep.html);
 }
 

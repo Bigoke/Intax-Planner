@@ -642,7 +642,7 @@ function provisionalCalc(client, y, pack, res, opts) {
 
 // ---------- interest on underpayment (s89quat) and assessment reconciliation ----------
 function assessmentInterest(y, res, opts) {
-  const rate = n(opts && opts.interestRate) / 100;
+  const rate = n(opts && opts.interestRate) / 100 || ((opts && opts.interestRates && opts.interestRates.length) ? 0.1 : 0);
   const date = (y.assessment && y.assessment.date) || (y.finalOpts && y.finalOpts.expectedAssessmentDate) || '';
   const effective = res.provisional.p3.dueDate;
   const out = { rate: rate * 100, effectiveDate: effective, assessmentDate: date, days: 0, amount: 0, applies: false };
@@ -651,6 +651,14 @@ function assessmentInterest(y, res, opts) {
   const owing = Math.max(0, res.normalTax - res.paye - res.provisionalPaid);
   const days = Math.max(0, daysBetween(effective, date));
   out.days = days; out.owing = r2(owing); out.amount = r2(owing * rate * days / 365); out.applies = days > 0 && owing > 0;
+  // With the SARS rate table, charge each day at the rate in force on that day.
+  const rates = opts && opts.interestRates;
+  if (rates && rates.length && days > 0) {
+    let total = 0; const rs = rates.slice().sort((a, b) => a.from.localeCompare(b.from));
+    const start = new Date(effective + 'T00:00:00Z'); start.setUTCDate(start.getUTCDate() + 1);
+    for (let d = new Date(start); iso(d) <= date; d.setUTCDate(d.getUTCDate() + 1)) { let rt = rs[0].rate; for (const x of rs) if (x.from <= iso(d)) rt = x.rate; total += owing * rt / 100 / 365; }
+    out.amount = r2(total); out.rate = rs.filter(x => x.from <= date).slice(-1)[0].rate;
+  }
   return out;
 }
 function assessmentRecon(y, res) {

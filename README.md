@@ -33,6 +33,11 @@ A Windows desktop tax planning workstation for South African tax practitioners. 
 - **What-if planner:** test RA top-ups, donations, bonuses and asset sales before year end.
 - **Tax tables screen:** edit brackets, rebates, thresholds, medical credits, CGT, retirement cap, travel tables and lump sum tables for any year. You can also import or export them, or reset to the SARS defaults.
 
+## New in 1.5
+
+- **SARS penalties & interest** (Final → Penalties & interest): foreseeable amounts for a late ITR12 (s210/s211 fixed penalty by prior-year taxable income, up to 35 months), late or short IRP6 payments (10% plus interest), underestimation (20%, including a 2nd IRP6 not submitted), s89quat interest, late payment of the assessment (10% plus interest), and an understatement-penalty scenario (s223 table). Interest is calculated day by day at SARS Table 1 rates, which you can edit on the Tax tables screen. ITR12 filing deadlines appear in Deadlines & payments.
+- **Export to Excel with working formulas**: every screen has an **Excel** button and every report preview has **Export to Excel**. Client exports include a live working paper (Computation, Provisional, Penalties, Tax tables, Interest rates) where inputs are blue and every calculation is an Excel formula with named ranges; report tables get SUM formulas on total rows. `npm run test:excel` recalculates the demo working papers in LibreOffice and checks them against the engine.
+
 ## New in 1.4
 - **SARS eFiling tax calculator (ITC12):**
   - Import the "Tax Calculator Result" PDF, paste its text, or type the figures. The client and year are matched on the reference number and year of assessment.

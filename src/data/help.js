@@ -127,6 +127,13 @@ const ARTICLES = [
   A('itc12', 'SARS eFiling tax calculator (ITC12)', 'sarscalc', 'sars calculator itc12 efiling calculate preview estimate assessment refund import pdf', [],
     `<p>On eFiling, the <b>Calculate</b> button on the ITR12 produces a <b>Tax Calculator Result (ITC12)</b>: the amounts per source code, taxable income, normal tax, rebates, employees' tax and a calculated result.</p>
      <p>It does <b>not</b> include provisional tax payments, assessed losses brought forward or other carry-overs. Save it as PDF and import it on the <b>SARS tax calculator</b> screen: Intax Planner compares it with the plan line by line and deducts the provisional tax recorded to show the expected payable or refund on assessment.</p>`),
+  A('penalties', 'SARS penalties and interest', 'penalties', 'penalty penalties interest late submission late payment underestimation understatement admin administrative fine remission', [],
+    `<p><b>Late ITR12:</b> a fixed administrative penalty of R250 to R16 000 per month (based on the previous year's taxable income) for each month the return is outstanding, for up to 35 months.</p>
+     <p><b>Provisional tax:</b> 10% of any amount not paid by the due date, plus interest; 20% underestimation penalty if the 2nd estimate is too low (or nil if the 2nd IRP6 is not submitted).</p>
+     <p><b>Interest:</b> on underpaid provisional tax from the effective date (s89quat) and on late payments, at SARS's prescribed rates. <b>Assessment:</b> 10% if not paid by the due date, plus interest. <b>Understatement:</b> 10%–200% of the extra tax if SARS adjusts the return, depending on behaviour.</p>`),
+  A('excel-export', 'Export to Excel (working papers with formulas)', 'final', 'excel xlsx export spreadsheet working paper formulas workbook download', [],
+    `<p>Every screen has an <b>Excel</b> button and every report preview has <b>Export to Excel</b>. For a client you get a live working paper: Computation, Provisional, Penalties, Tax tables and Interest rates sheets.</p>
+     <p>Inputs are blue on yellow; everything else is an Excel formula (tax tables via INDEX/MATCH, s11F and s18A limits, medical credits, IRP6 payments, the underestimation test, and interest day by day at SARS rates). Change an input and the workbook recalculates. Report tables are added as a sheet with SUBTOTAL formulas on total rows.</p>`),
   A('update-tables', 'Updating tax tables after the Budget', 'taxtables', 'update tax tables budget new year rates edit import', [],
     `<p>All rates, rebates, thresholds, credits, CGT and travel tables are stored in editable tax packs. Open <b>Tax Tables</b>, choose the year and change any value, or import a pack file. Reset restores the SARS defaults shipped with the app.</p>`)
 ];

@@ -138,6 +138,14 @@ ipcMain.handle('file:exportCsv', async (e, text, name) => {
   const res = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('documents'), name), filters: [{ name: 'CSV', extensions: ['csv'] }] });
   if (res.canceled) return null; fs.writeFileSync(res.filePath, '﻿' + text); return res.filePath;
 });
+ipcMain.handle('excel:save', async (e, spec, name, open) => {
+  const safe = String(name || 'Intax export.xlsx').replace(/[\\/:*?"<>|]/g, '');
+  const res = process.env.INTAX_XLSX_OUT ? { filePath: path.join(process.env.INTAX_XLSX_OUT, safe) } : await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('documents'), safe), filters: [{ name: 'Excel workbook', extensions: ['xlsx'] }] });
+  if (res.canceled || !res.filePath) return null;
+  await require('./src/excel/writer.js').writeWorkbook(spec, res.filePath);
+  if (open && !process.env.INTAX_XLSX_OUT) shell.openPath(res.filePath);
+  return res.filePath;
+});
 ipcMain.handle('app:openDataDir', () => shell.openPath(DATA_DIR));
 ipcMain.handle('app:openUrl', (e, url) => { if (/^https:\/\//.test(url)) shell.openExternal(url); });
 ipcMain.handle('app:listBackups', () => { try { return fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.json')).sort().reverse(); } catch (e) { return []; } });

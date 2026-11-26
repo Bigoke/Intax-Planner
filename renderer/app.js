@@ -128,7 +128,7 @@ const App = {
     const p = el.dataset.p; let v;
     if (el.type === 'checkbox') v = el.checked;
     else if (el.dataset.num) {
-      if (el.value.trim() === '' && (p.endsWith('estimateTI') || p.endsWith('.paye') || p.endsWith('.upTo'))) v = null;
+      if (el.value.trim() === '' && (p.endsWith('estimateTI') || p.endsWith('.paye') || p.endsWith('.upTo') || p.endsWith('priorTI') || p.endsWith('irp5Value') || /assessment\.(taxableIncome|normalTax|paye|provisional|balance)$/.test(p))) v = null;
       else { v = parseNum(el.value); if (el.dataset.num === 'pct') v = v / 100; if (el.dataset.num === 'int') v = Math.round(v); }
     } else v = el.value;
     if (el.tagName === 'SELECT' && el.dataset.num) v = Number(v);

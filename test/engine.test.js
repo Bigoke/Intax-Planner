@@ -227,5 +227,37 @@ eq('itc categories agree', rc.rows.reduce((a, x) => a + Math.abs(x.diff), 0), 0)
 eq('itc after provisional', rc.sarsAfterProvisional, -7828);
 eq('itc no difference', rc.difference, 0);
 
+// 23. Penalties and interest
+const PN = require('../src/engine/penalties.js');
+const { INTEREST_RATES } = require('../src/data/taxpacks.js');
+eq('interest across rate change', PN.interestBetween(100000, '2026-08-01', '2026-10-01', INTEREST_RATES).amount, 100000 * 0.1025 * 31 / 365 + 100000 * 0.105 * 30 / 365, 0.02);
+eq('months late part month', PN.monthsLate('2026-10-23', '2026-11-24'), 2);
+eq('months late exact', PN.monthsLate('2026-10-23', '2026-11-23'), 1);
+eq('admin R1m', PN.adminMonthly(600000), 1000);
+eq('admin loss', PN.adminMonthly(-5), 250);
+eq('admin >50m', PN.adminMonthly(60000000), 16000);
+y = year(2027, d => { d.business = [{ name: 'B', turnover: 500000, expenses: [{ desc: 'c', amount: 100000 }] }]; d.flags.provisional = true; d.provisional.p1.paid = 20000; d.provisional.p1.datePaid = '2026-09-15'; d.penalties = { asAt: '2026-11-30' }; });
+r = E.compute(client(), y, P(2027), CODES);
+let pn = PN.penaltiesCalc(client(), y, P(2027), r, E, INTEREST_RATES);
+const p1i = pn.irp6[0];
+eq('P1 late penalty 10%', p1i.penalty, 3370.85);
+eq('P1 interest', p1i.interest, 20000 * 0.105 * 15 / 365 + 13708.5 * 0.105 * 91 / 365, 0.02);
+eq('P2 not yet due', pn.irp6[1].penalty, 0);
+// late ITR12: provisional deadline 2027 is 2028-01-21, submitted 2028-04-05 -> 3 months, prior TI 400k -> R500
+y.penalties = { asAt: '2028-05-01', submittedDate: '2028-04-05', priorTI: 400000 };
+pn = PN.penaltiesCalc(client(), y, P(2027), E.compute(client(), y, P(2027), CODES), E, INTEREST_RATES);
+eq('late return months', pn.filing.months, 3);
+eq('late return penalty', pn.filing.amount, 1500);
+// understatement: R100 000 adjustment, reasonable care not taken, standard -> 25% of extra tax at 31%
+y.penalties.understatement = { adjustment: 100000, behaviour: 'reasonableCare', case: 'standard' };
+pn = PN.penaltiesCalc(client(), y, P(2027), E.compute(client(), y, P(2027), CODES), E, INTEREST_RATES);
+eq('understatement shortfall', pn.understatement.shortfall, E.normalTax(500000, 38, P(2027)) - E.normalTax(400000, 38, P(2027)), 0.01);
+eq('understatement penalty', pn.understatement.amount, pn.understatement.shortfall * 0.25, 0.01);
+// s89quat in engine with rate table equals the penalties module
+y.finalOpts = { expectedAssessmentDate: '2028-03-15' }; y.penalties = { asAt: '2028-03-15' };
+r = E.compute(client(), y, P(2027), CODES, { interestRates: INTEREST_RATES });
+pn = PN.penaltiesCalc(client(), y, P(2027), r, E, INTEREST_RATES);
+eq('s89quat engine = module', r.interest89.amount, pn.quat.amount, 0.05);
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

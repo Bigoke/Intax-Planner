@@ -61,6 +61,7 @@ function pack(year, o) {
 
 const TAX_PACKS = {
   2020: pack(2020, {
+    filing: { nonProvisional: '2020-11-16', provisional: '2021-01-29' },
     brackets: BR_2020, rebates: { primary: 14220, secondary: 7794, tertiary: 2601 },
     thresholds: { under65: 79000, age65: 122300, age75: 136750 },
     medicalCredits: { main: 310, first: 310, additional: 209 },
@@ -71,6 +72,7 @@ const TAX_PACKS = {
     notes: 'Foreign employment income fully exempt if s10(1)(o)(ii) days test met (cap introduced from 2021). Subsistence rates: verify against SARS notice of 1 March 2019.'
   }),
   2021: pack(2021, {
+    filing: { nonProvisional: '2021-11-23', provisional: '2022-01-31' },
     brackets: BR_2021, rebates: { primary: 14958, secondary: 8199, tertiary: 2736 },
     thresholds: { under65: 83100, age65: 128650, age75: 143850 },
     medicalCredits: { main: 319, first: 319, additional: 215 },
@@ -78,6 +80,7 @@ const TAX_PACKS = {
     travel: { scale: TR_2021, prescribedRate: 3.98 }, subsistence: { meals: 452, incidental: 139 }
   }),
   2022: pack(2022, {
+    filing: { nonProvisional: '2022-10-24', provisional: '2023-01-23' },
     brackets: BR_2022, rebates: { primary: 15714, secondary: 8613, tertiary: 2871 },
     thresholds: { under65: 87300, age65: 135150, age75: 151100 },
     medicalCredits: { main: 332, first: 332, additional: 224 },
@@ -85,6 +88,7 @@ const TAX_PACKS = {
     travel: { scale: TR_2022, prescribedRate: 3.82 }, subsistence: { meals: 452, incidental: 139 }
   }),
   2023: pack(2023, {
+    filing: { nonProvisional: '2023-10-23', provisional: '2024-01-24' },
     brackets: BR_2023, rebates: { primary: 16425, secondary: 9000, tertiary: 2997 },
     thresholds: { under65: 91250, age65: 141250, age75: 157900 },
     medicalCredits: { main: 347, first: 347, additional: 234 },
@@ -92,12 +96,14 @@ const TAX_PACKS = {
     travel: { scale: TR_2023, prescribedRate: 4.18 }, subsistence: { meals: 493, incidental: 152 }
   }),
   2024: pack(2024, {
+    filing: { nonProvisional: '2024-10-21', provisional: '2025-01-20' },
     brackets: BR_2024, rebates: { primary: 17235, secondary: 9444, tertiary: 3145 },
     thresholds: { under65: 95750, age65: 148217, age75: 165689 },
     medicalCredits: { main: 364, first: 364, additional: 246 },
     travel: { scale: TR_2024, prescribedRate: 4.64 }, subsistence: { meals: 522, incidental: 161 }
   }),
   2025: pack(2025, {
+    filing: { nonProvisional: '2025-10-20', provisional: '2026-01-19' },
     brackets: BR_2024, rebates: { primary: 17235, secondary: 9444, tertiary: 3145 },
     thresholds: { under65: 95750, age65: 148217, age75: 165689 },
     medicalCredits: { main: 364, first: 364, additional: 246 },
@@ -105,6 +111,7 @@ const TAX_PACKS = {
     notes: 'Brackets not adjusted for inflation. Two-pot system from 1 September 2024: savings withdrawals taxed at marginal rates.'
   }),
   2026: pack(2026, {
+    filing: { nonProvisional: '2026-10-23', provisional: '2027-01-22' },
     brackets: BR_2024, rebates: { primary: 17235, secondary: 9444, tertiary: 3145 },
     thresholds: { under65: 95750, age65: 148217, age75: 165689 },
     medicalCredits: { main: 364, first: 364, additional: 246 },
@@ -112,6 +119,7 @@ const TAX_PACKS = {
     notes: 'Brackets not adjusted for inflation (second year).'
   }),
   2027: pack(2027, {
+    filing: { nonProvisional: '2027-10-22', provisional: '2028-01-21', estimate: true },
     brackets: BR_2027, rebates: { primary: 17820, secondary: 9765, tertiary: 3249 },
     thresholds: { under65: 99000, age65: 153250, age75: 171300 },
     medicalCredits: { main: 376, first: 376, additional: 254 },
@@ -126,9 +134,17 @@ const TAX_PACKS = {
 TAX_PACKS[2021].tfsa = { annual: 36000, lifetime: 500000 };
 
 const YEARS = Object.keys(TAX_PACKS).map(Number).sort();
+// SARS Table 1 – interest charged on outstanding taxes (% p.a.), each rate applies from its date until the next.
+// Source: SARS Legal-Pub-IRT-01 Interest Rates Table 1 (updated September 2026).
+const INTEREST_RATES = [
+  ['2018-07-01', 10.00], ['2019-03-01', 10.25], ['2019-11-01', 10.00], ['2020-05-01', 9.75], ['2020-07-01', 7.75], ['2020-09-01', 7.25], ['2020-11-01', 7.00],
+  ['2022-03-01', 7.25], ['2022-05-01', 7.50], ['2022-07-01', 7.75], ['2022-09-01', 8.25], ['2022-11-01', 9.00], ['2023-01-01', 9.75], ['2023-03-01', 10.50],
+  ['2023-05-01', 10.75], ['2023-07-01', 11.25], ['2023-09-01', 11.75], ['2025-01-01', 11.50], ['2025-03-01', 11.25], ['2025-05-01', 11.00], ['2025-09-01', 10.75],
+  ['2025-11-01', 10.50], ['2026-03-01', 10.25], ['2026-09-01', 10.50]
+].map(([from, rate]) => ({ from, rate }));
 // Label and dates for any tax year (used for tax years added by the user).
 function yearMeta(year) { const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0; return { year, label: `${year - 1}/${String(year).slice(2)} (1 Mar ${year - 1} – ${leap ? 29 : 28} Feb ${year})`, start: `${year - 1}-03-01`, end: `${year}-02-${leap ? 29 : 28}` }; }
 
-const __exp = { TAX_PACKS, YEARS, BUILT_IN_YEARS: YEARS.slice(), yearMeta };
+const __exp = { TAX_PACKS, YEARS, BUILT_IN_YEARS: YEARS.slice(), yearMeta, INTEREST_RATES };
 if (typeof module !== 'undefined' && module.exports) module.exports = __exp; else root.IntaxPacks = __exp;
 })(typeof window !== 'undefined' ? window : globalThis);

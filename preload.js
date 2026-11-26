@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('intax', {
   print: (html) => ipcRenderer.invoke('report:print', html),
   exportJson: (data, name) => ipcRenderer.invoke('file:exportJson', data, name),
   importJson: () => ipcRenderer.invoke('file:importJson'),
+  exportExcel: (spec, name, open) => ipcRenderer.invoke('excel:save', spec, name, open),
   exportCsv: (text, name) => ipcRenderer.invoke('file:exportCsv', text, name),
   pickImage: () => ipcRenderer.invoke('file:pickImage'),
   openDataDir: () => ipcRenderer.invoke('app:openDataDir'),

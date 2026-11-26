@@ -1,7 +1,7 @@
 {
   "name": "intax-planner",
   "productName": "Intax Planner",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "South African individual income tax planner: provisional tax (IRP6) and ITR12",
   "main": "main.js",
   "author": "Bigoke",
@@ -11,7 +11,8 @@
     "test": "node test/engine.test.js",
     "smoke": "electron --no-sandbox scripts/smoke.js",
     "dist": "electron-builder --win nsis portable",
-    "dist:linux-host": "electron-builder --win portable --publish never && makensis -DVERSION=$npm_package_version build/installer.nsi"
+    "dist:linux-host": "electron-builder --win portable --publish never && makensis -DVERSION=$npm_package_version build/installer.nsi",
+    "test:excel": "node test/excel.verify.js"
   },
   "build": {
     "appId": "za.co.bigoke.intaxplanner",
@@ -57,6 +58,7 @@
     "resedit": "^1.7.2"
   },
   "dependencies": {
+    "exceljs": "^4.4.0",
     "pdfjs-dist": "^4.10.38"
   }
 }

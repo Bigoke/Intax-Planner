@@ -311,10 +311,11 @@ SCREENS.provisional = () => {
 function payBlock(k) {
   const r = result(), pv = r.provisional, P6 = yd().provisional[k] || {};
   const due = k === 'p3' ? pv.p3.dueDate : pv.dueDates[k];
-  const amt = pv[k].due, rate = E.n(S.settings.interestRate) / 100;
+  const curRate = window.IntaxPenalties ? window.IntaxPenalties.currentRate(window.interestRates(), new Date().toISOString().slice(0, 10)) : E.n(S.settings.interestRate);
+  const amt = pv[k].due, rate = curRate / 100;
   let note = '';
   if (k !== 'p3' && P6.datePaid && P6.datePaid > due) note = `<div class="alert bad">⚠ Paid after the due date (${dateLong(due)}): 10% late payment penalty of about ${money(0.1 * Math.max(amt, E.n(P6.paid)))} plus interest.</div>`;
-  else if (E.n(P6.paid) + 1 < amt) note = `<div class="alert info">Outstanding ${money(amt - E.n(P6.paid))}. ${k === 'p3' ? 'Interest' : 'If paid late: 10% penalty plus interest'} at ${E.n(S.settings.interestRate)}% p.a. ≈ ${money((amt - E.n(P6.paid)) * rate / 12)} per month.</div>`;
+  else if (E.n(P6.paid) + 1 < amt) note = `<div class="alert info">Outstanding ${money(amt - E.n(P6.paid))}. ${k === 'p3' ? 'Interest' : 'If paid late: 10% penalty plus interest'} at ${curRate}% p.a. ≈ ${money((amt - E.n(P6.paid)) * rate / 12)} per month.</div>`;
   return `<div class="card"><h2>Payment made</h2><div class="grid g3">${f({ p: `y.provisional.${k}.paid`, label: 'Amount paid', type: 'money' })}${f({ p: `y.provisional.${k}.datePaid`, label: 'Date paid', type: 'date' })}${f({ p: `y.provisional.${k}.prn`, label: 'Payment reference (PRN)' })}</div>${note}</div>`;
 }
 SCREENS.p1 = () => {
